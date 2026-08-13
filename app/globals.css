@@ -74,12 +74,21 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 1px solid 
 .cycle-lotus-button:active .cycle-lotus { transform: scale(.985); }
 .cycle-lotus { width: 100%; height: 250px; display: block; overflow: visible; transition: transform .22s ease; }
 .lotus-aura { fill: url(#lotus-fill); }
-.lotus-petal { fill: url(#petal-fill); stroke: color-mix(in srgb, var(--cycle-color) 84%, white 16%); stroke-width: 1.45; opacity: 0; transform-box: fill-box; transform-origin: center bottom; transition: opacity .36s ease, transform .58s cubic-bezier(.2, .8, .2, 1); }
-.lotus-petal.left { transform: scale(.22) rotate(12deg); }
-.lotus-petal.right { transform: scale(.22) rotate(-12deg); }
-.lotus-petal.center { transform: scale(.4) translateY(18px); }
-.lotus-petal.is-visible { opacity: 1; transform: scale(1) rotate(0) translateY(0); }
-.lotus-petal.outer { transition-delay: .08s; }.lotus-petal.middle { transition-delay: .045s; }
+.lotus-bloom { transform-origin: 190px 192px; }
+.lotus-petal { fill: url(#petal-fill); stroke: color-mix(in srgb, var(--cycle-color) 84%, white 16%); stroke-width: 1.45; opacity: 0; transform-box: view-box; transform-origin: 190px 192px; will-change: transform, opacity; transition-property: opacity, transform, stroke; transition-duration: .22s, .82s, .45s; transition-timing-function: ease, cubic-bezier(.16, .9, .26, 1.08), ease; transition-delay: var(--close-delay, 0s); }
+.lotus-petal.inner { --open-delay: .04s; --close-delay: .18s; }
+.lotus-petal.middle { --open-delay: .12s; --close-delay: .09s; }
+.lotus-petal.outer { --open-delay: .2s; --close-delay: .02s; }
+.lotus-petal.inner.left { transform: rotate(31deg) scale(.78); }
+.lotus-petal.inner.right { transform: rotate(-31deg) scale(.78); }
+.lotus-petal.middle.left { transform: rotate(51deg) scale(.7); }
+.lotus-petal.middle.right { transform: rotate(-51deg) scale(.7); }
+.lotus-petal.outer.left { transform: rotate(72deg) scale(.62); }
+.lotus-petal.outer.right { transform: rotate(-72deg) scale(.62); }
+.lotus-bloom .lotus-petal.is-visible { opacity: 1; transform: rotate(0deg) scale(1); transition-delay: var(--open-delay, 0s); }
+.lotus-petal.lotus-drop { fill: url(#drop-fill); stroke-width: 1.65; transform: rotate(0deg) scale(1); transform-origin: 190px 198px; transition-delay: 0s; }
+.lotus-drop-shine { fill: none; stroke: rgba(255, 255, 255, .48); stroke-width: 1.1; stroke-linecap: round; opacity: .2; filter: drop-shadow(0 0 4px rgba(255, 255, 255, .28)); transition: opacity .45s ease; }
+.lotus-stage-menstruation .lotus-drop-shine { opacity: .46; animation: drop-shimmer 3.2s ease-in-out infinite; }
 .lotus-day { fill: #f8f1fa; font-size: 37px; font-weight: 360; letter-spacing: -.05em; filter: drop-shadow(0 0 10px rgba(255, 255, 255, .18)); }
 .lotus-day-label { fill: color-mix(in srgb, var(--cycle-color) 42%, #777 58%); font-size: 7px; letter-spacing: .11em; text-transform: uppercase; }
 .lotus-tap-hint { position: absolute; z-index: 2; left: 50%; bottom: 1px; transform: translateX(-50%); display: flex; align-items: center; gap: 5px; color: #514a56; font-size: 7px; white-space: nowrap; }
@@ -382,6 +391,7 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 1px solid 
 @keyframes loading-breathe { 50% { opacity: .18; } }
 @keyframes veil-in { from { opacity: 0; } }
 @keyframes sheet-up { from { opacity: .5; transform: translateY(34px); } }
+@keyframes drop-shimmer { 50% { opacity: .22; } }
 
 @media (min-width: 700px) {
   .phone-scene { margin: 24px auto; min-height: calc(100svh - 48px); border: 1px solid rgba(255, 255, 255, .055); border-radius: 34px; }
@@ -394,5 +404,5 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 1px solid 
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
+  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }

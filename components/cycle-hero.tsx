@@ -147,7 +147,7 @@ export default function CycleHero({
     "--dial-offset": `${activeIndex * .72 - dragX * .075}`,
   } as CSSProperties;
 
-  return <section className={`cycle-hero lotus-stage-${stage.key}`} style={customStyle} aria-labelledby="cycle-title">
+  return <section className={`cycle-hero lotus-stage-${stage.key}`} style={customStyle} aria-labelledby="cycle-title" data-lotus-stage={stage.key} data-lotus-petals={stage.petals}>
     <div className="cosmic-dust" aria-hidden="true">{Array.from({ length: 42 }, (_, index) => <i key={index} />)}</div>
 
     <svg
@@ -232,20 +232,26 @@ export default function CycleHero({
             <stop stopColor={stage.color} stopOpacity=".28" />
             <stop offset="1" stopColor={stage.color} stopOpacity=".035" />
           </linearGradient>
+          <radialGradient id="drop-fill" cx="50%" cy="35%" r="72%">
+            <stop stopColor={stage.color} stopOpacity=".48" />
+            <stop offset=".52" stopColor={stage.color} stopOpacity=".2" />
+            <stop offset="1" stopColor={stage.color} stopOpacity=".055" />
+          </radialGradient>
           <filter id="lotus-glow" x="-50%" y="-50%" width="200%" height="200%">
             <feGaussianBlur stdDeviation="5" result="blur" />
             <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
           </filter>
         </defs>
         <ellipse className="lotus-aura" cx="190" cy="135" rx="150" ry="108" />
-        <g className={`lotus-bloom bloom-${stage.petals}`} filter="url(#lotus-glow)">
-          <path className={`lotus-petal outer left${stage.petals >= 7 ? " is-visible" : ""}`} d="M190 191 C137 211 84 204 43 171 C96 153 151 163 190 191Z" />
-          <path className={`lotus-petal outer right${stage.petals >= 7 ? " is-visible" : ""}`} d="M190 191 C243 211 296 204 337 171 C284 153 229 163 190 191Z" />
-          <path className={`lotus-petal middle left${stage.petals >= 5 ? " is-visible" : ""}`} d="M185 188 C133 191 91 165 78 123 C124 120 164 146 185 188Z" />
-          <path className={`lotus-petal middle right${stage.petals >= 5 ? " is-visible" : ""}`} d="M195 188 C247 191 289 165 302 123 C256 120 216 146 195 188Z" />
-          <path className={`lotus-petal inner left${stage.petals >= 3 ? " is-visible" : ""}`} d="M188 186 C145 174 119 132 128 88 C166 99 188 137 188 186Z" />
-          <path className={`lotus-petal inner right${stage.petals >= 3 ? " is-visible" : ""}`} d="M192 186 C235 174 261 132 252 88 C214 99 192 137 192 186Z" />
-          <path className="lotus-petal center is-visible" d="M190 188 C151 158 153 88 190 42 C227 88 229 158 190 188Z" />
+        <g className={`lotus-bloom bloom-${stage.petals}`} filter="url(#lotus-glow)" aria-hidden="true">
+          <path className={`lotus-petal outer left${stage.petals >= 7 ? " is-visible" : ""}`} d="M190 192 C138 214 82 207 40 173 C94 151 151 163 190 192Z" />
+          <path className={`lotus-petal outer right${stage.petals >= 7 ? " is-visible" : ""}`} d="M190 192 C242 214 298 207 340 173 C286 151 229 163 190 192Z" />
+          <path className={`lotus-petal middle left${stage.petals >= 5 ? " is-visible" : ""}`} d="M190 191 C138 197 91 170 72 126 C121 119 167 148 190 191Z" />
+          <path className={`lotus-petal middle right${stage.petals >= 5 ? " is-visible" : ""}`} d="M190 191 C242 197 289 170 308 126 C259 119 213 148 190 191Z" />
+          <path className={`lotus-petal inner left${stage.petals >= 3 ? " is-visible" : ""}`} d="M190 190 C148 180 118 137 126 89 C165 101 188 141 190 190Z" />
+          <path className={`lotus-petal inner right${stage.petals >= 3 ? " is-visible" : ""}`} d="M190 190 C232 180 262 137 254 89 C215 101 192 141 190 190Z" />
+          <path className="lotus-petal lotus-drop center is-visible" d="M190 37 C190 37 143 95 143 140 C143 174 164 200 190 200 C216 200 237 174 237 140 C237 95 190 37 190 37Z" />
+          <path className="lotus-drop-shine" d="M170 87 C160 105 157 123 160 139" />
         </g>
         <text className="lotus-day" x="190" y="130" textAnchor="middle">{day.cycleDay}</text>
         <text className="lotus-day-label" x="190" y="149" textAnchor="middle">день цикла</text>
