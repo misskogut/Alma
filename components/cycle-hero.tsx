@@ -47,6 +47,7 @@ const STAGES: Record<LotusStage["key"], LotusStage> = {
 const MONTH_SHORT = new Intl.DateTimeFormat("ru-RU", { month: "short", timeZone: "UTC" });
 const DOT_STEP = 35;
 const MAX_DRAG = DOT_STEP * 6;
+const LOTUS_PETAL_PATH = "M190 32 C165 65 143 104 142 138 C141 167 157 187 190 201 C223 187 239 167 238 138 C237 104 215 65 190 32Z";
 
 function stageForPhase(phase: CyclePhase) {
   if (phase === "menstruation") return STAGES.menstruation;
@@ -56,7 +57,7 @@ function stageForPhase(phase: CyclePhase) {
 }
 
 function arcPoint(offset: number) {
-  const normalized = Math.max(-1.08, Math.min(1.08, offset / 8.8));
+  const normalized = Math.max(-1.08, Math.min(1.08, offset / 6.4));
   const angle = normalized * 1.14;
   return {
     x: 190 + Math.sin(angle) * 187,
@@ -89,7 +90,7 @@ export default function CycleHero({
   const dragged = useRef(false);
   const todayIndex = days.findIndex((item) => item.isToday);
   const visibleDays = [];
-  for (let index = Math.max(0, activeIndex - 10); index <= Math.min(days.length - 1, activeIndex + 10); index += 1) {
+  for (let index = Math.max(0, activeIndex - 8); index <= Math.min(days.length - 1, activeIndex + 8); index += 1) {
     visibleDays.push({ item: days[index], index, offset: index - activeIndex });
   }
 
@@ -144,7 +145,6 @@ export default function CycleHero({
 
   const customStyle = {
     "--cycle-color": stage.color,
-    "--dial-offset": `${activeIndex * .72 - dragX * .075}`,
   } as CSSProperties;
 
   return <section className={`cycle-hero lotus-stage-${stage.key}`} style={customStyle} aria-labelledby="cycle-title" data-lotus-stage={stage.key} data-lotus-petals={stage.petals}>
@@ -163,25 +163,18 @@ export default function CycleHero({
       onKeyDown={onDialKeyDown}
     >
       <defs>
-        <linearGradient id="dial-gradient" x1="0" x2="1">
-          <stop stopColor="#ff435f" />
-          <stop offset=".34" stopColor="#4fd39a" />
-          <stop offset=".66" stopColor="#48a8ff" />
-          <stop offset="1" stopColor="#c45cff" />
-        </linearGradient>
         <filter id="dial-glow" x="-150%" y="-150%" width="400%" height="400%">
           <feGaussianBlur stdDeviation="4" result="blur" />
           <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
         </filter>
       </defs>
-      <path className="cycle-dial-track" d="M-7 119 C68 -7 312 -7 387 119" pathLength="100" />
       {visibleDays.map(({ item, index, offset }) => {
         const visualOffset = offset + dragX / DOT_STEP;
-        if (Math.abs(visualOffset) > 9.1) return null;
+        if (Math.abs(visualOffset) > 6.45) return null;
         const point = arcPoint(visualOffset);
         const dotStage = stageForPhase(item.phase);
         const isActive = index === activeIndex && dragX === 0;
-        const isNear = Math.abs(visualOffset) <= 5.2;
+        const isNear = Math.abs(visualOffset) <= 6.45;
         const month = item.dayOfMonth === 1 ? MONTH_SHORT.format(item.date).replace(".", "") : "";
         return <g
           key={item.iso}
@@ -200,12 +193,11 @@ export default function CycleHero({
           }}
         >
           {isActive ? <circle className="dial-active-halo" r="13" filter="url(#dial-glow)" /> : null}
-          <circle className="dial-date-dot" r={isActive ? 4.8 : item.marker ? 3.1 : 2.05} />
+          <circle className="dial-date-dot" r={isActive ? 5.2 : item.marker ? 3.35 : 2.45} />
           {isNear ? <text className="dial-date-number" y="15" textAnchor="middle">{item.dayOfMonth}</text> : null}
           {month ? <text className="dial-date-month" y="24" textAnchor="middle">{month}</text> : null}
         </g>;
       })}
-      <path className="dial-center-pointer" d="M190 50 l-4 7 h8Z" />
     </svg>
 
     <button className="cycle-jump previous" type="button" onClick={() => select(activeIndex - profile.cycleLength)} aria-label="Предыдущий цикл">‹</button>
@@ -233,9 +225,10 @@ export default function CycleHero({
             <stop offset="1" stopColor={stage.color} stopOpacity=".035" />
           </linearGradient>
           <radialGradient id="drop-fill" cx="50%" cy="35%" r="72%">
-            <stop stopColor={stage.color} stopOpacity=".48" />
-            <stop offset=".52" stopColor={stage.color} stopOpacity=".2" />
-            <stop offset="1" stopColor={stage.color} stopOpacity=".055" />
+            <stop stopColor={stage.color} stopOpacity=".88" />
+            <stop offset=".48" stopColor={stage.color} stopOpacity=".52" />
+            <stop offset=".82" stopColor="#100817" stopOpacity=".92" />
+            <stop offset="1" stopColor="#050108" stopOpacity=".98" />
           </radialGradient>
           <filter id="lotus-glow" x="-50%" y="-50%" width="200%" height="200%">
             <feGaussianBlur stdDeviation="5" result="blur" />
@@ -244,14 +237,14 @@ export default function CycleHero({
         </defs>
         <ellipse className="lotus-aura" cx="190" cy="135" rx="150" ry="108" />
         <g className={`lotus-bloom bloom-${stage.petals}`} filter="url(#lotus-glow)" aria-hidden="true">
-          <path className={`lotus-petal outer left${stage.petals >= 7 ? " is-visible" : ""}`} d="M190 192 C138 214 82 207 40 173 C94 151 151 163 190 192Z" />
-          <path className={`lotus-petal outer right${stage.petals >= 7 ? " is-visible" : ""}`} d="M190 192 C242 214 298 207 340 173 C286 151 229 163 190 192Z" />
-          <path className={`lotus-petal middle left${stage.petals >= 5 ? " is-visible" : ""}`} d="M190 191 C138 197 91 170 72 126 C121 119 167 148 190 191Z" />
-          <path className={`lotus-petal middle right${stage.petals >= 5 ? " is-visible" : ""}`} d="M190 191 C242 197 289 170 308 126 C259 119 213 148 190 191Z" />
-          <path className={`lotus-petal inner left${stage.petals >= 3 ? " is-visible" : ""}`} d="M190 190 C148 180 118 137 126 89 C165 101 188 141 190 190Z" />
-          <path className={`lotus-petal inner right${stage.petals >= 3 ? " is-visible" : ""}`} d="M190 190 C232 180 262 137 254 89 C215 101 192 141 190 190Z" />
-          <path className="lotus-petal lotus-drop center is-visible" d="M190 37 C190 37 143 95 143 140 C143 174 164 200 190 200 C216 200 237 174 237 140 C237 95 190 37 190 37Z" />
-          <path className="lotus-drop-shine" d="M170 87 C160 105 157 123 160 139" />
+          <path className={`lotus-petal outer left${stage.petals >= 7 ? " is-visible" : ""}`} d={LOTUS_PETAL_PATH} />
+          <path className={`lotus-petal outer right${stage.petals >= 7 ? " is-visible" : ""}`} d={LOTUS_PETAL_PATH} />
+          <path className={`lotus-petal middle left${stage.petals >= 5 ? " is-visible" : ""}`} d={LOTUS_PETAL_PATH} />
+          <path className={`lotus-petal middle right${stage.petals >= 5 ? " is-visible" : ""}`} d={LOTUS_PETAL_PATH} />
+          <path className={`lotus-petal inner left${stage.petals >= 3 ? " is-visible" : ""}`} d={LOTUS_PETAL_PATH} />
+          <path className={`lotus-petal inner right${stage.petals >= 3 ? " is-visible" : ""}`} d={LOTUS_PETAL_PATH} />
+          <path className="lotus-petal lotus-drop center is-visible" d={LOTUS_PETAL_PATH} />
+          <path className="lotus-drop-shine" d="M171 77 C159 101 155 126 160 148" />
         </g>
         <text className="lotus-day" x="190" y="130" textAnchor="middle">{day.cycleDay}</text>
         <text className="lotus-day-label" x="190" y="149" textAnchor="middle">день цикла</text>
