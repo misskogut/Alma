@@ -48,6 +48,15 @@ const MONTH_SHORT = new Intl.DateTimeFormat("ru-RU", { month: "short", timeZone:
 const DOT_STEP = 35;
 const DIAL_BUFFER_RADIUS = 24;
 const LOTUS_PETAL_PATH = "M190 27 C159 64 141 103 142 138 C143 172 166 200 190 200 C214 200 237 172 238 138 C239 103 221 64 190 27Z";
+const LOTUS_PETALS = [
+  { id: "outer-left", className: "outer left", layer: "outer", side: -1 },
+  { id: "outer-right", className: "outer right", layer: "outer", side: 1 },
+  { id: "middle-left", className: "middle left", layer: "middle", side: -1 },
+  { id: "middle-right", className: "middle right", layer: "middle", side: 1 },
+  { id: "inner-left", className: "inner left", layer: "inner", side: -1 },
+  { id: "inner-right", className: "inner right", layer: "inner", side: 1 },
+  { id: "center", className: "lotus-drop center", layer: "center", side: 0 },
+] as const;
 const SELECTOR_PHASE: Record<LotusStage["key"], string> = {
   menstruation: "Месячные",
   low: "Низкая фаза",
@@ -73,6 +82,13 @@ function arcPoint(offset: number) {
 
 function clampIndex(index: number, days: DayModel[]) {
   return Math.max(0, Math.min(days.length - 1, index));
+}
+
+function petalAngle(layer: (typeof LOTUS_PETALS)[number]["layer"], side: number, petals: LotusStage["petals"]) {
+  if (layer === "center" || petals === 1) return 0;
+  if (petals === 3) return 27 * side;
+  if (petals === 5) return (layer === "inner" ? 27 : 52) * side;
+  return (layer === "inner" ? 27 : layer === "middle" ? 52 : 76) * side;
 }
 
 export default function CycleHero({
@@ -101,6 +117,10 @@ export default function CycleHero({
   const previewIndex = isDragging ? clampIndex(previewIndexState, days) : activeIndex;
   const previewDay = days[previewIndex];
   const previewStage = stageForPhase(previewDay.phase);
+  const lotusPetals = LOTUS_PETALS.map((petal) => ({
+    ...petal,
+    angle: petalAngle(petal.layer, petal.side, previewStage.petals),
+  }));
   const visibleDays: Array<{ item: DayModel; index: number; offset: number }> = [];
   for (let index = Math.max(0, activeIndex - DIAL_BUFFER_RADIUS); index <= Math.min(days.length - 1, activeIndex + DIAL_BUFFER_RADIUS); index += 1) {
     visibleDays.push({ item: days[index], index, offset: index - activeIndex });
@@ -262,7 +282,7 @@ export default function CycleHero({
   } as CSSProperties;
 
   return <section
-    className={`cycle-hero lotus-stage-${previewStage.key}`}
+    className={`cycle-hero lotus-stage-${previewStage.key}${isDragging ? " is-cycle-scrubbing" : ""}`}
     style={customStyle}
     aria-labelledby="cycle-title"
     data-lotus-stage={previewStage.key}
@@ -372,17 +392,59 @@ export default function CycleHero({
             <feGaussianBlur stdDeviation="5" result="blur" />
             <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
           </filter>
+          <filter id="pollen-glow" x="-300%" y="-300%" width="700%" height="700%">
+            <feGaussianBlur stdDeviation="2.8" result="blur" />
+            <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+          </filter>
         </defs>
+        <g className="lotus-pollen-field" aria-hidden="true" filter="url(#pollen-glow)">
+          {Array.from({ length: 34 }, (_, index) => {
+            const x = 42 + ((index * 79) % 296);
+            const y = 34 + ((index * 53) % 172);
+            const size = .65 + (index % 5) * .34;
+            return <circle
+              key={index}
+              className={`lotus-pollen pollen-${index % 3}`}
+              cx={x}
+              cy={y}
+              r={size}
+              style={{
+                "--pollen-delay": `${-(index % 11) * .73}s`,
+                "--pollen-duration": `${5.8 + (index % 7) * .72}s`,
+                "--pollen-x": `${((index * 17) % 25) - 12}px`,
+                "--pollen-y": `${-12 - (index % 6) * 4}px`,
+              } as CSSProperties}
+            />;
+          })}
+        </g>
         <ellipse className="lotus-aura" cx="190" cy="135" rx="150" ry="108" />
         <g className={`lotus-bloom bloom-${previewStage.petals}`} filter="url(#lotus-glow)" aria-hidden="true">
-          <path className="lotus-petal outer left" d={LOTUS_PETAL_PATH} />
-          <path className="lotus-petal outer right" d={LOTUS_PETAL_PATH} />
-          <path className="lotus-petal middle left" d={LOTUS_PETAL_PATH} />
-          <path className="lotus-petal middle right" d={LOTUS_PETAL_PATH} />
-          <path className="lotus-petal inner left" d={LOTUS_PETAL_PATH} />
-          <path className="lotus-petal inner right" d={LOTUS_PETAL_PATH} />
-          <path className="lotus-petal lotus-drop center" d={LOTUS_PETAL_PATH} />
+          {lotusPetals.map((petal) => <path
+            key={petal.id}
+            className={`lotus-petal ${petal.className}`}
+            style={{ "--petal-angle": `${petal.angle}deg` } as CSSProperties}
+            d={LOTUS_PETAL_PATH}
+          />)}
           <path className="lotus-drop-shine" d="M171 76 C159 101 155 127 160 151" />
+        </g>
+        <g className="lotus-pollen-field is-foreground" aria-hidden="true" filter="url(#pollen-glow)">
+          {Array.from({ length: 18 }, (_, index) => {
+            const x = 126 + ((index * 67) % 132);
+            const y = 55 + ((index * 47) % 132);
+            return <circle
+              key={index}
+              className={`lotus-pollen pollen-${(index + 1) % 3}`}
+              cx={x}
+              cy={y}
+              r={.55 + (index % 4) * .31}
+              style={{
+                "--pollen-delay": `${-(index % 9) * .81}s`,
+                "--pollen-duration": `${6.4 + (index % 6) * .68}s`,
+                "--pollen-x": `${((index * 13) % 19) - 9}px`,
+                "--pollen-y": `${-10 - (index % 5) * 4}px`,
+              } as CSSProperties}
+            />;
+          })}
         </g>
         <text className="lotus-day" x="190" y="130" textAnchor="middle">{previewDay.cycleDay}</text>
         <text className="lotus-day-label" x="190" y="149" textAnchor="middle">день цикла</text>
