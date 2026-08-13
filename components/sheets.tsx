@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { AlmaProfile, DayModel, EnvironmentPayload, SymptomEntry, ZoneKey } from "../lib/alma";
-import { ZONE_META, feelingLabel, formatShortDate, phaseLabel, pressureMmHg, relativeDayLabel, todayIso, weatherLabel } from "../lib/alma";
+import { ZONE_META, addDays, dateFromIso, daysBetween, feelingLabel, formatShortDate, isoFromDate, phaseLabel, pressureMmHg, relativeDayLabel, todayIso, weatherLabel } from "../lib/alma";
 
 function SheetLayer({ children, onClose, className = "" }: { children: React.ReactNode; onClose: () => void; className?: string }) {
   useEffect(() => {
@@ -47,19 +47,116 @@ export function DaySheet({ day, environment, symptoms, onClose }: { day: DayMode
   </SheetLayer>;
 }
 
-export function CycleSettingsSheet({ profile, onSave, onClose }: { profile: AlmaProfile; onSave: (profile: AlmaProfile) => void; onClose: () => void }) {
-  const [draft, setDraft] = useState(profile);
+const WEEKDAYS = ["пн", "вт", "ср", "чт", "пт", "сб", "вс"];
+const MONTH_LONG = new Intl.DateTimeFormat("ru-RU", { month: "long", year: "numeric", timeZone: "UTC" });
+
+function firstOfMonth(iso: string) {
+  return `${iso.slice(0, 7)}-01`;
+}
+
+function shiftMonth(iso: string, amount: number) {
+  const date = dateFromIso(firstOfMonth(iso));
+  date.setUTCMonth(date.getUTCMonth() + amount);
+  return isoFromDate(date);
+}
+
+function calendarDays(monthIso: string) {
+  const first = dateFromIso(firstOfMonth(monthIso));
+  const mondayOffset = (first.getUTCDay() + 6) % 7;
+  const gridStart = addDays(isoFromDate(first), -mondayOffset);
+  return Array.from({ length: 42 }, (_, index) => addDays(gridStart, index));
+}
+
+export function CycleSettingsSheet({
+  profile,
+  activeIso,
+  onSave,
+  onClose,
+}: {
+  profile: AlmaProfile;
+  activeIso: string;
+  onSave: (profile: AlmaProfile, focusIso?: string) => void;
+  onClose: () => void;
+}) {
+  const currentIso = todayIso();
+  const initialMonth = activeIso <= currentIso ? activeIso : currentIso;
+  const [visibleMonth, setVisibleMonth] = useState(firstOfMonth(initialMonth));
+  const [selectedStart, setSelectedStart] = useState(profile.lastPeriodStart);
+  const [duration, setDuration] = useState(profile.periodLength);
+  const [cycleLength, setCycleLength] = useState(profile.cycleLength);
+  const [automaticHighlights, setAutomaticHighlights] = useState(profile.automaticHighlights);
+  const days = useMemo(() => calendarDays(visibleMonth), [visibleMonth]);
+  const currentMonth = firstOfMonth(currentIso);
+
+  function savePeriod() {
+    onSave({
+      ...profile,
+      lastPeriodStart: selectedStart,
+      periodLength: duration,
+      cycleLength,
+      automaticHighlights,
+    }, selectedStart);
+  }
+
   return <SheetLayer onClose={onClose}>
-    <section className="bottom-sheet settings-sheet" role="dialog" aria-modal="true" aria-labelledby="cycle-settings-title">
+    <section className="bottom-sheet period-sheet" role="dialog" aria-modal="true" aria-labelledby="cycle-settings-title">
       <div className="sheet-handle" />
-      <header className="sheet-header"><div><p className="eyebrow">календарная память</p><h2 id="cycle-settings-title">Настроить цикл</h2></div><button type="button" aria-label="Закрыть" onClick={onClose}>×</button></header>
-      <p className="settings-intro">Эти значения двигают лотос, фазы и бусины. Они не меняют субъективную волну автоматически.</p>
-      <label className="settings-field"><span>Первый день последних месячных</span><input type="date" max={todayIso()} value={draft.lastPeriodStart} onChange={(event) => setDraft({ ...draft, lastPeriodStart: event.target.value })} /></label>
-      <label className="settings-field"><span>Средняя длина цикла <b>{draft.cycleLength} дней</b></span><input type="range" min="21" max="45" value={draft.cycleLength} onChange={(event) => setDraft({ ...draft, cycleLength: Number(event.target.value) })} /><small>21</small><small>45</small></label>
-      <label className="settings-field"><span>Обычно идут месячные <b>{draft.periodLength} дней</b></span><input type="range" min="1" max="10" value={draft.periodLength} onChange={(event) => setDraft({ ...draft, periodLength: Number(event.target.value) })} /><small>1</small><small>10</small></label>
-      <label className="settings-toggle"><span><b>Автоподсветка совпадений</b><small>Можно отключить в любой момент</small></span><input type="checkbox" checked={draft.automaticHighlights} onChange={(event) => setDraft({ ...draft, automaticHighlights: event.target.checked })} /></label>
-      <button className="primary-action" type="button" disabled={!draft.lastPeriodStart} onClick={() => onSave(draft)}>сохранить и перестроить</button>
-      <p className="settings-legal">Овуляция и фертильное окно рассчитываются ориентировочно. Для медицинских решений этот расчёт не предназначен.</p>
+      <header className="sheet-header"><div><p className="eyebrow">календарь цикла</p><h2 id="cycle-settings-title">Отметить месячные</h2></div><button type="button" aria-label="Закрыть" onClick={onClose}>×</button></header>
+      <p className="settings-intro">Выберите первый день, затем укажите длительность кружочками. Лотос и дуга перестроятся сразу после сохранения.</p>
+
+      <div className="period-calendar">
+        <header className="calendar-header">
+          <button type="button" onClick={() => setVisibleMonth(shiftMonth(visibleMonth, -1))} aria-label="Предыдущий месяц">‹</button>
+          <strong>{MONTH_LONG.format(dateFromIso(visibleMonth))}</strong>
+          <button type="button" disabled={visibleMonth >= currentMonth} onClick={() => setVisibleMonth(shiftMonth(visibleMonth, 1))} aria-label="Следующий месяц">›</button>
+        </header>
+        <div className="calendar-weekdays" aria-hidden="true">{WEEKDAYS.map((weekday) => <span key={weekday}>{weekday}</span>)}</div>
+        <div className="calendar-grid" role="grid" aria-label="Выберите первый день месячных">
+          {days.map((iso) => {
+            const delta = daysBetween(selectedStart, iso);
+            const isPeriod = delta >= 0 && delta < duration;
+            const isStart = iso === selectedStart;
+            const isToday = iso === currentIso;
+            const isOutside = firstOfMonth(iso) !== visibleMonth;
+            const isFuture = iso > currentIso;
+            return <button
+              key={iso}
+              type="button"
+              role="gridcell"
+              disabled={isFuture}
+              aria-selected={isStart}
+              aria-label={`${formatShortDate(iso)}${isPeriod ? ", день менструации" : ""}`}
+              className={`${isOutside ? " is-outside" : ""}${isPeriod ? " is-period" : ""}${isStart ? " is-start" : ""}${isToday ? " is-today" : ""}`}
+              onClick={() => setSelectedStart(iso)}
+            >
+              <span>{dateFromIso(iso).getUTCDate()}</span><i />
+            </button>;
+          })}
+        </div>
+      </div>
+
+      <div className="period-selection-summary">
+        <span><small>первый день</small><strong>{formatShortDate(selectedStart)}</strong></span>
+        <i />
+        <span><small>длительность</small><strong>{duration} {duration === 1 ? "день" : duration < 5 ? "дня" : "дней"}</strong></span>
+      </div>
+
+      <fieldset className="period-duration">
+        <legend>Количество дней</legend>
+        <div>{Array.from({ length: 10 }, (_, index) => {
+          const value = index + 1;
+          return <button key={value} type="button" className={value <= duration ? "is-filled" : ""} aria-label={`${value} дней`} aria-pressed={value === duration} onClick={() => setDuration(value)}><i /><span>{value}</span></button>;
+        })}</div>
+      </fieldset>
+
+      <div className="cycle-length-setting">
+        <span><small>Средняя длина цикла</small><strong>{cycleLength} дней</strong></span>
+        <div><button type="button" disabled={cycleLength <= 21} onClick={() => setCycleLength((value) => Math.max(21, value - 1))}>−</button><button type="button" disabled={cycleLength >= 45} onClick={() => setCycleLength((value) => Math.min(45, value + 1))}>＋</button></div>
+      </div>
+
+      <label className="settings-toggle"><span><b>Автоподсветка фаз</b><small>Дуга показывает расчётные фазы и овуляцию</small></span><input type="checkbox" checked={automaticHighlights} onChange={(event) => setAutomaticHighlights(event.target.checked)} /></label>
+      <button className="primary-action period-save" type="button" disabled={!selectedStart || selectedStart > currentIso} onClick={savePeriod}>отметить месячные</button>
+      <p className="settings-legal">Фазы, фертильное окно и овуляция рассчитываются ориентировочно. Это календарное наблюдение, не медицинское заключение.</p>
     </section>
   </SheetLayer>;
 }

@@ -42,46 +42,58 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 1px solid 
 .sync-status.status-connecting i { animation: sync-pulse 1.4s ease-in-out infinite; }
 
 /* Cycle hero */
-.cycle-hero { min-height: 528px; position: relative; overflow: hidden; border-top: 1px solid rgba(255, 255, 255, .018); border-bottom: 1px solid rgba(215, 133, 255, .08); background: radial-gradient(ellipse at 50% 45%, color-mix(in srgb, var(--cycle-color) 18%, transparent), transparent 47%), radial-gradient(ellipse at 50% 5%, rgba(133, 67, 214, .11), transparent 43%), #030107; }
-.cycle-hero::after { content: ""; position: absolute; inset: auto 0 0; height: 110px; pointer-events: none; background: linear-gradient(180deg, transparent, #040207); }
-.cosmic-dust { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(7, 1fr); grid-template-rows: repeat(5, 1fr); padding: 38px 19px 64px; opacity: .7; }
-.cosmic-dust i { width: 2px; height: 2px; align-self: center; justify-self: center; border-radius: 50%; background: var(--cycle-color); box-shadow: 0 0 7px var(--cycle-color); animation: star-breathe 4s ease-in-out infinite; }
-.cosmic-dust i:nth-child(3n) { width: 1px; height: 1px; opacity: .45; transform: translate(19px, -14px); animation-delay: -1.4s; }
-.cosmic-dust i:nth-child(4n) { width: 3px; height: 3px; opacity: .68; transform: translate(-11px, 17px); animation-delay: -2.2s; }
-.cosmic-dust i:nth-child(5n) { background: #a66cff; transform: translate(7px, 29px); animation-delay: -.8s; }
-.cycle-settings-button { position: absolute; z-index: 8; top: 7px; right: 15px; min-height: 27px; display: flex; align-items: center; gap: 7px; border: 1px solid rgba(255, 255, 255, .065); border-radius: 999px; padding: 0 9px 0 10px; background: rgba(5, 3, 8, .62); color: #68606d; font-size: 8px; cursor: pointer; backdrop-filter: blur(10px); }
-.cycle-settings-button i { color: var(--cycle-color); font-size: 12px; font-style: normal; }
-.cycle-orbit { width: 100%; height: 136px; position: absolute; z-index: 3; top: 14px; left: 0; overflow: visible; }
-.orbit-track, .orbit-progress { fill: none; stroke-width: 4.2; stroke-linecap: round; }
-.orbit-track { stroke: rgba(139, 103, 175, .18); }
-.orbit-progress { stroke: url(#orbit-gradient); filter: drop-shadow(0 0 7px color-mix(in srgb, var(--cycle-color) 58%, transparent)); }
-.orbit-tick { fill: rgba(197, 173, 216, .26); }
-.orbit-marker.period { fill: #ff526b; filter: drop-shadow(0 0 5px #ff3458); }
-.orbit-marker.fertile { fill: #7be8e1; filter: drop-shadow(0 0 6px #67d9e4); }
-.orbit-marker.ovulation { fill: #ff6bdc; stroke: #ffd3fa; stroke-width: .5; filter: drop-shadow(0 0 7px #ff53d3); }
-.active-cycle-orb > circle:first-child { fill: color-mix(in srgb, var(--cycle-color) 11%, transparent); stroke: color-mix(in srgb, var(--cycle-color) 82%, white 18%); stroke-width: 1; }
-.active-cycle-orb > circle:nth-child(2) { fill: #f9e7ff; stroke: var(--cycle-color); stroke-width: 2; }
-.active-cycle-orb text { fill: #97889e; font-size: 7px; letter-spacing: .05em; }
-.phase-badge { min-width: 102px; position: absolute; z-index: 6; top: 88px; left: 50%; transform: translateX(-50%); padding: 8px 13px 9px; border: 1px solid color-mix(in srgb, var(--cycle-color) 75%, white 12%); border-radius: 999px; background: rgba(8, 3, 12, .78); text-align: center; box-shadow: 0 0 25px color-mix(in srgb, var(--cycle-color) 20%, transparent), inset 0 0 15px color-mix(in srgb, var(--cycle-color) 7%, transparent); backdrop-filter: blur(10px); }
+.cycle-hero { min-height: 610px; position: relative; overflow: hidden; border-top: 1px solid rgba(255, 255, 255, .018); border-bottom: 1px solid color-mix(in srgb, var(--cycle-color) 13%, transparent); background: radial-gradient(ellipse at 50% 42%, color-mix(in srgb, var(--cycle-color) 17%, transparent), transparent 45%), radial-gradient(ellipse at 50% 2%, rgba(133, 67, 214, .1), transparent 40%), #030107; transition: background .45s ease, border-color .45s ease; }
+.cycle-hero::after { content: ""; position: absolute; inset: auto 0 0; height: 125px; pointer-events: none; background: linear-gradient(180deg, transparent, #040207); }
+.cosmic-dust { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(7, 1fr); grid-template-rows: repeat(6, 1fr); padding: 34px 18px 67px; opacity: .7; pointer-events: none; }
+.cosmic-dust i { width: 2px; height: 2px; align-self: center; justify-self: center; border-radius: 50%; background: var(--cycle-color); box-shadow: 0 0 8px var(--cycle-color); animation: star-breathe 4s ease-in-out infinite; }
+.cosmic-dust i:nth-child(3n) { width: 1px; height: 1px; opacity: .38; transform: translate(19px, -14px); animation-delay: -1.4s; }
+.cosmic-dust i:nth-child(4n) { width: 3px; height: 3px; opacity: .65; transform: translate(-11px, 17px); animation-delay: -2.2s; }
+.cosmic-dust i:nth-child(5n) { transform: translate(7px, 29px); animation-delay: -.8s; }
+.cycle-dial { width: 100%; height: 154px; position: absolute; z-index: 8; top: 0; left: 0; overflow: visible; touch-action: pan-y; user-select: none; cursor: grab; }
+.cycle-dial.is-dragging { cursor: grabbing; }
+.cycle-dial-track { fill: none; stroke: url(#dial-gradient); stroke-width: 4.6; stroke-linecap: round; stroke-dasharray: .32 2.05; stroke-dashoffset: var(--dial-offset); opacity: .52; filter: drop-shadow(0 0 7px color-mix(in srgb, var(--cycle-color) 38%, transparent)); transition: stroke-dashoffset .28s ease; }
+.cycle-dial.is-dragging .cycle-dial-track { transition: none; }
+.dial-date { cursor: pointer; }
+.dial-date-dot { fill: var(--dot-color); opacity: .72; filter: drop-shadow(0 0 4px var(--dot-color)); transition: r .2s ease, opacity .2s ease; }
+.dial-date-number { fill: #6e6475; font-size: 7px; font-weight: 500; }
+.dial-date-month { fill: #493f4e; font-size: 5.5px; letter-spacing: .06em; text-transform: uppercase; }
+.dial-date.is-today:not(.is-active) .dial-date-dot { stroke: #f4eafa; stroke-width: 1; }
+.dial-date.is-active .dial-date-dot { fill: #fff; stroke: var(--cycle-color); stroke-width: 2.2; opacity: 1; }
+.dial-date.is-active .dial-date-number { fill: #f3eaf6; font-size: 8px; }
+.dial-active-halo { fill: color-mix(in srgb, var(--cycle-color) 13%, transparent); stroke: color-mix(in srgb, var(--cycle-color) 76%, white 24%); stroke-width: 1; }
+.dial-center-pointer { fill: var(--cycle-color); opacity: .62; filter: drop-shadow(0 0 6px var(--cycle-color)); }
+.cycle-jump { width: 31px; height: 31px; position: absolute; z-index: 12; top: 69px; display: grid; place-items: center; border: 1px solid rgba(255, 255, 255, .065); border-radius: 50%; background: rgba(5, 3, 9, .66); color: #807487; font-size: 20px; line-height: 1; cursor: pointer; backdrop-filter: blur(10px); }
+.cycle-jump.previous { left: 13px; }.cycle-jump.next { right: 13px; }
+.phase-badge { min-width: 132px; position: absolute; z-index: 11; top: 65px; left: 50%; transform: translateX(-50%); padding: 8px 14px 9px; border: 1px solid color-mix(in srgb, var(--cycle-color) 68%, white 11%); border-radius: 999px; background: rgba(7, 3, 11, .82); text-align: center; box-shadow: 0 0 27px color-mix(in srgb, var(--cycle-color) 22%, transparent), inset 0 0 15px color-mix(in srgb, var(--cycle-color) 7%, transparent); backdrop-filter: blur(12px); }
 .phase-badge span, .phase-badge strong { display: block; }
 .phase-badge span { color: #8a7c91; font-size: 7px; }
-.phase-badge strong { margin-top: 2px; color: #eee7f0; font-size: 10px; font-weight: 500; }
-.cycle-lotus { width: 100%; height: 262px; position: absolute; z-index: 4; top: 124px; left: 0; overflow: visible; color: var(--cycle-color); }
+.phase-badge strong { margin-top: 3px; color: #eee7f0; font-size: 9px; font-weight: 500; }
+.cycle-settings-button { position: absolute; z-index: 13; top: 108px; right: 14px; min-height: 27px; display: flex; align-items: center; gap: 6px; border: 1px solid rgba(255, 255, 255, .06); border-radius: 999px; padding: 0 8px 0 10px; background: rgba(5, 3, 8, .62); color: #625a67; font-size: 7px; cursor: pointer; backdrop-filter: blur(10px); }
+.cycle-settings-button i { color: var(--cycle-color); font-size: 12px; font-style: normal; }
+.cycle-lotus-button { width: 100%; height: 278px; position: absolute; z-index: 7; top: 126px; left: 0; display: block; border: 0; padding: 0; background: transparent; color: inherit; cursor: pointer; }
+.cycle-lotus-button:active .cycle-lotus { transform: scale(.985); }
+.cycle-lotus { width: 100%; height: 250px; display: block; overflow: visible; transition: transform .22s ease; }
 .lotus-aura { fill: url(#lotus-fill); }
-.lotus-petals path { fill: color-mix(in srgb, var(--cycle-color) 11%, transparent); stroke: color-mix(in srgb, var(--cycle-color) 88%, white 12%); stroke-width: 1.4; }
-.lotus-petals.rear { opacity: .75; }
-.lotus-petals.front path { fill: color-mix(in srgb, var(--cycle-color) 14%, transparent); }
-.lotus-day { fill: #f7f0f8; font-size: 37px; font-weight: 360; letter-spacing: -.05em; filter: drop-shadow(0 0 10px rgba(255, 255, 255, .16)); }
-.lotus-day-label { fill: #9e8ba3; font-size: 7px; letter-spacing: .1em; text-transform: uppercase; }
-.cycle-copy { width: 100%; position: absolute; z-index: 7; top: 374px; left: 0; padding: 0 31px; text-align: center; }
-.cycle-copy h1 { margin: 0; color: #f0e9f2; font-size: 18px; font-weight: 470; letter-spacing: -.03em; }
-.cycle-copy p { max-width: 330px; margin: 9px auto 0; color: #6d6571; font-size: 9px; line-height: 1.5; }
-.cycle-marker-legend { position: absolute; z-index: 8; left: 0; right: 0; bottom: 24px; display: flex; justify-content: center; gap: 14px; }
-.cycle-marker-legend span { display: flex; align-items: center; gap: 5px; color: #59515e; font-size: 7px; }
-.cycle-marker-legend i { width: 6px; height: 6px; display: inline-block; border-radius: 50%; }
-.cycle-marker-legend i.period { background: #ff506a; box-shadow: 0 0 6px #ff405d; }
-.cycle-marker-legend i.fertile { background: #66e7dc; box-shadow: 0 0 6px #52d7e0; }
-.cycle-marker-legend i.ovulation { border-radius: 50% 50% 50% 0; transform: rotate(-45deg); background: #ff65da; box-shadow: 0 0 7px #f754ce; }
+.lotus-petal { fill: url(#petal-fill); stroke: color-mix(in srgb, var(--cycle-color) 84%, white 16%); stroke-width: 1.45; opacity: 0; transform-box: fill-box; transform-origin: center bottom; transition: opacity .36s ease, transform .58s cubic-bezier(.2, .8, .2, 1); }
+.lotus-petal.left { transform: scale(.22) rotate(12deg); }
+.lotus-petal.right { transform: scale(.22) rotate(-12deg); }
+.lotus-petal.center { transform: scale(.4) translateY(18px); }
+.lotus-petal.is-visible { opacity: 1; transform: scale(1) rotate(0) translateY(0); }
+.lotus-petal.outer { transition-delay: .08s; }.lotus-petal.middle { transition-delay: .045s; }
+.lotus-day { fill: #f8f1fa; font-size: 37px; font-weight: 360; letter-spacing: -.05em; filter: drop-shadow(0 0 10px rgba(255, 255, 255, .18)); }
+.lotus-day-label { fill: color-mix(in srgb, var(--cycle-color) 42%, #777 58%); font-size: 7px; letter-spacing: .11em; text-transform: uppercase; }
+.lotus-tap-hint { position: absolute; z-index: 2; left: 50%; bottom: 1px; transform: translateX(-50%); display: flex; align-items: center; gap: 5px; color: #514a56; font-size: 7px; white-space: nowrap; }
+.lotus-tap-hint i { width: 5px; height: 5px; display: block; border: 1px solid var(--cycle-color); border-radius: 50%; box-shadow: 0 0 7px color-mix(in srgb, var(--cycle-color) 55%, transparent); }
+.cycle-copy { width: 100%; position: absolute; z-index: 9; top: 414px; left: 0; padding: 0 28px; text-align: center; }
+.cycle-stage-count { margin: 0 0 7px !important; color: color-mix(in srgb, var(--cycle-color) 55%, #62596a 45%) !important; font-size: 7px !important; letter-spacing: .13em; text-transform: uppercase; }
+.cycle-copy h1 { max-width: 390px; margin: 0 auto; color: #f0e9f2; font-size: 19px; font-weight: 470; line-height: 1.15; letter-spacing: -.035em; }
+.cycle-copy > p:not(.cycle-stage-count) { max-width: 336px; margin: 9px auto 0; color: #68606d; font-size: 8px; line-height: 1.5; }
+.return-today { min-height: 27px; margin-top: 10px; border: 1px solid color-mix(in srgb, var(--cycle-color) 18%, transparent); border-radius: 999px; padding: 0 11px; background: color-mix(in srgb, var(--cycle-color) 5%, transparent); color: color-mix(in srgb, var(--cycle-color) 55%, #807585 45%); font-size: 7px; cursor: pointer; }
+.cycle-stage-legend { position: absolute; z-index: 10; left: 0; right: 0; bottom: 19px; display: flex; justify-content: center; gap: 8px; }
+.cycle-stage-legend span { min-width: 34px; height: 20px; padding: 0 7px; display: flex; align-items: center; justify-content: center; gap: 5px; border: 1px solid rgba(255, 255, 255, .04); border-radius: 999px; background: rgba(255, 255, 255, .012); opacity: .35; transition: opacity .2s, border-color .2s; }
+.cycle-stage-legend span.is-active { border-color: color-mix(in srgb, var(--cycle-color) 20%, transparent); opacity: 1; }
+.cycle-stage-legend i { width: 5px; height: 5px; display: block; border-radius: 50%; box-shadow: 0 0 6px currentColor; }
+.cycle-stage-legend b { color: #8d8392; font-size: 7px; font-weight: 500; }
 
 /* Wave */
 .wave-section { min-height: 371px; position: relative; border-bottom: 1px solid rgba(255, 255, 255, .045); background: linear-gradient(180deg, rgba(9, 6, 14, .96), rgba(5, 4, 9, .96)); }
@@ -314,6 +326,46 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 1px solid 
 .settings-toggle { margin-top: 10px; padding: 12px 13px; display: flex; align-items: center; justify-content: space-between; border: 1px solid rgba(255, 255, 255, .055); border-radius: 15px; }.settings-toggle b, .settings-toggle small { display: block; }.settings-toggle b { color: #aaa1ae; font-size: 9px; }.settings-toggle small { margin-top: 3px; color: #56505a; font-size: 7px; }.settings-toggle input { accent-color: #ac5cf0; }
 .primary-action { width: 100%; min-height: 43px; margin-top: 15px; border: 1px solid rgba(211, 139, 255, .24); border-radius: 999px; background: linear-gradient(90deg, rgba(119, 68, 205, .42), rgba(214, 73, 185, .35)); color: #eee5f0; font-size: 9px; cursor: pointer; box-shadow: 0 0 25px rgba(160, 70, 216, .08); }.primary-action:disabled { opacity: .35; }
 .settings-legal { margin: 12px 7px 0; color: #4c4650; font-size: 7px; line-height: 1.45; text-align: center; }
+.period-sheet { max-height: 94svh; background: radial-gradient(circle at 50% 0, rgba(255, 67, 95, .085), transparent 16rem), radial-gradient(circle at 84% 45%, rgba(119, 76, 218, .08), transparent 20rem), #09060d; }
+.period-calendar { margin-top: 15px; padding: 12px 10px 10px; border: 1px solid rgba(255, 255, 255, .055); border-radius: 22px; background: rgba(255, 255, 255, .014); }
+.calendar-header { height: 34px; display: grid; grid-template-columns: 32px 1fr 32px; align-items: center; gap: 8px; }
+.calendar-header strong { color: #d9d0dc; font-size: 12px; font-weight: 500; text-align: center; text-transform: capitalize; }
+.calendar-header button { width: 30px; height: 30px; display: grid; place-items: center; border: 1px solid rgba(255, 255, 255, .06); border-radius: 50%; background: rgba(255, 255, 255, .02); color: #887e8c; font-size: 18px; cursor: pointer; }
+.calendar-header button:disabled { opacity: .22; cursor: default; }
+.calendar-weekdays { margin: 9px 0 5px; display: grid; grid-template-columns: repeat(7, 1fr); }
+.calendar-weekdays span { color: #514a55; font-size: 7px; letter-spacing: .08em; text-align: center; text-transform: uppercase; }
+.calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+.calendar-grid button { aspect-ratio: 1; min-width: 0; position: relative; display: grid; place-items: center; border: 1px solid transparent; border-radius: 50%; background: transparent; color: #8e8592; cursor: pointer; }
+.calendar-grid button span { position: relative; z-index: 2; font-size: 9px; }
+.calendar-grid button i { width: 4px; height: 4px; position: absolute; z-index: 2; bottom: 5px; left: 50%; transform: translateX(-50%); border-radius: 50%; background: transparent; }
+.calendar-grid button.is-outside { opacity: .28; }
+.calendar-grid button:disabled { opacity: .12; cursor: default; }
+.calendar-grid button.is-period { color: #ffecef; background: radial-gradient(circle, rgba(255, 67, 95, .24), rgba(255, 67, 95, .065) 65%, transparent 68%); }
+.calendar-grid button.is-period i { background: #ff536d; box-shadow: 0 0 6px #ff405d; }
+.calendar-grid button.is-start { border-color: rgba(255, 118, 141, .7); box-shadow: 0 0 16px rgba(255, 62, 92, .18), inset 0 0 10px rgba(255, 73, 102, .12); }
+.calendar-grid button.is-today:not(.is-start)::after { content: ""; width: 3px; height: 3px; position: absolute; top: 4px; right: 5px; border-radius: 50%; background: #b874ee; box-shadow: 0 0 5px #a25be1; }
+.period-selection-summary { min-height: 59px; margin-top: 9px; padding: 10px 13px; display: grid; grid-template-columns: 1fr 17px 1fr; align-items: center; gap: 7px; border: 1px solid rgba(255, 79, 107, .095); border-radius: 17px; background: rgba(255, 66, 95, .025); }
+.period-selection-summary > span:last-child { text-align: right; }
+.period-selection-summary small, .period-selection-summary strong { display: block; }
+.period-selection-summary small { color: #655c68; font-size: 6px; letter-spacing: .1em; text-transform: uppercase; }
+.period-selection-summary strong { margin-top: 4px; color: #cfc5d2; font-size: 10px; font-weight: 500; }
+.period-selection-summary > i { height: 1px; display: block; background: linear-gradient(90deg, transparent, #ff536d, transparent); box-shadow: 0 0 6px rgba(255, 70, 99, .45); }
+.period-duration { min-width: 0; margin: 13px 0 0; padding: 12px 10px 10px; border: 1px solid rgba(255, 255, 255, .05); border-radius: 17px; }
+.period-duration legend { padding: 0 5px; color: #706773; font-size: 7px; letter-spacing: .08em; text-transform: uppercase; }
+.period-duration > div { display: grid; grid-template-columns: repeat(10, 1fr); gap: 2px; }
+.period-duration button { min-width: 0; height: 34px; display: grid; place-items: center; border: 0; padding: 0; background: transparent; color: #514a55; cursor: pointer; }
+.period-duration button i { width: 15px; height: 15px; grid-area: 1 / 1; display: block; border: 1px solid rgba(255, 255, 255, .075); border-radius: 50%; background: rgba(255, 255, 255, .015); transition: background .2s, box-shadow .2s, transform .2s; }
+.period-duration button span { grid-area: 1 / 1; position: relative; z-index: 2; font-size: 6px; }
+.period-duration button.is-filled { color: #ffe9ed; }
+.period-duration button.is-filled i { border-color: rgba(255, 94, 120, .42); background: rgba(255, 67, 95, .42); box-shadow: 0 0 9px rgba(255, 62, 93, .28); }
+.period-duration button[aria-pressed="true"] i { transform: scale(1.18); border-color: #ff718a; }
+.cycle-length-setting { min-height: 57px; margin-top: 9px; padding: 10px 11px 10px 13px; display: flex; align-items: center; justify-content: space-between; border: 1px solid rgba(255, 255, 255, .05); border-radius: 16px; background: rgba(255, 255, 255, .012); }
+.cycle-length-setting small, .cycle-length-setting strong { display: block; }
+.cycle-length-setting small { color: #625b66; font-size: 7px; }.cycle-length-setting strong { margin-top: 4px; color: #b9b0bd; font-size: 10px; font-weight: 500; }
+.cycle-length-setting > div { display: flex; gap: 5px; }
+.cycle-length-setting button { width: 31px; height: 31px; border: 1px solid rgba(255, 255, 255, .065); border-radius: 50%; background: rgba(255, 255, 255, .02); color: #8f8593; font-size: 13px; cursor: pointer; }
+.cycle-length-setting button:disabled { opacity: .25; cursor: default; }
+.period-save { border-color: rgba(255, 101, 124, .28); background: linear-gradient(90deg, rgba(178, 40, 70, .52), rgba(210, 65, 119, .38)); box-shadow: 0 0 27px rgba(223, 54, 93, .1); }
 
 /* Connections */
 .connections-layer { align-items: stretch; overflow-y: auto; background: rgba(1, 1, 3, .88); }

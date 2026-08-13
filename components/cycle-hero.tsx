@@ -1,88 +1,267 @@
-import type { AlmaProfile, CyclePhase, DayModel } from "../lib/alma";
-import { getCycleMarker, phaseHint, phaseLabel, relativeDayLabel } from "../lib/alma";
+"use client";
 
-const PHASE_COLOR: Record<CyclePhase, string> = {
-  menstruation: "#ff4f73",
-  follicular: "#856cff",
-  fertile: "#c95cff",
-  ovulation: "#ff5ad7",
-  luteal: "#8b6cdb",
+import { useRef, useState } from "react";
+import type { CSSProperties, KeyboardEvent, PointerEvent } from "react";
+import type { AlmaProfile, CyclePhase, DayModel } from "../lib/alma";
+import { phaseHint, relativeDayLabel } from "../lib/alma";
+
+type LotusStage = {
+  key: "menstruation" | "low" | "follicular" | "ovulation";
+  label: string;
+  petals: 1 | 3 | 5 | 7;
+  color: string;
+  description: string;
 };
 
-function orbitPoint(index: number, total: number) {
-  const progress = total <= 1 ? 0.5 : index / (total - 1);
+const STAGES: Record<LotusStage["key"], LotusStage> = {
+  menstruation: {
+    key: "menstruation",
+    label: "Менструация",
+    petals: 1,
+    color: "#ff435f",
+    description: "Отмеченные дни менструации",
+  },
+  low: {
+    key: "low",
+    label: "Низкая вероятность беременности",
+    petals: 3,
+    color: "#4fd39a",
+    description: "Спокойный календарный промежуток цикла",
+  },
+  follicular: {
+    key: "follicular",
+    label: "Фолликулярная фаза",
+    petals: 5,
+    color: "#48a8ff",
+    description: "Вероятное фертильное окно приближается",
+  },
+  ovulation: {
+    key: "ovulation",
+    label: "Овуляция",
+    petals: 7,
+    color: "#c45cff",
+    description: "Расчётный день овуляции",
+  },
+};
+
+const MONTH_SHORT = new Intl.DateTimeFormat("ru-RU", { month: "short", timeZone: "UTC" });
+const DOT_STEP = 35;
+const MAX_DRAG = DOT_STEP * 6;
+
+function stageForPhase(phase: CyclePhase) {
+  if (phase === "menstruation") return STAGES.menstruation;
+  if (phase === "ovulation") return STAGES.ovulation;
+  if (phase === "fertile") return STAGES.follicular;
+  return STAGES.low;
+}
+
+function arcPoint(offset: number) {
+  const normalized = Math.max(-1.08, Math.min(1.08, offset / 8.8));
+  const angle = normalized * 1.14;
   return {
-    x: 24 + progress * 332,
-    y: 91 - Math.sin(progress * Math.PI) * 67,
+    x: 190 + Math.sin(angle) * 187,
+    y: 27 + (1 - Math.cos(angle)) * 104,
   };
 }
 
-export default function CycleHero({ profile, day, onOpenSettings }: { profile: AlmaProfile; day: DayModel; onOpenSettings: () => void }) {
-  const color = PHASE_COLOR[day.phase];
-  const orbit = Array.from({ length: profile.cycleLength }, (_, index) => {
-    const cycleDay = index + 1;
-    return { cycleDay, marker: getCycleMarker(cycleDay, profile), ...orbitPoint(index, profile.cycleLength) };
-  });
-  const active = orbit[day.cycleDay - 1];
+function clampIndex(index: number, days: DayModel[]) {
+  return Math.max(0, Math.min(days.length - 1, index));
+}
 
-  return <section className={`cycle-hero phase-${day.phase}`} style={{ "--cycle-color": color } as React.CSSProperties} aria-labelledby="cycle-title">
-    <div className="cosmic-dust" aria-hidden="true">{Array.from({ length: 34 }, (_, index) => <i key={index} />)}</div>
-    <button className="cycle-settings-button" type="button" onClick={onOpenSettings} aria-label="Настроить цикл">
-      <span>цикл {profile.cycleLength} дн.</span><i>⌁</i>
-    </button>
+export default function CycleHero({
+  profile,
+  days,
+  activeIndex,
+  onSelectDay,
+  onOpenPeriod,
+}: {
+  profile: AlmaProfile;
+  days: DayModel[];
+  activeIndex: number;
+  onSelectDay: (index: number) => void;
+  onOpenPeriod: () => void;
+}) {
+  const day = days[activeIndex];
+  const stage = stageForPhase(day.phase);
+  const [dragX, setDragX] = useState(0);
+  const dragXRef = useRef(0);
+  const dragStart = useRef<number | null>(null);
+  const dragged = useRef(false);
+  const todayIndex = days.findIndex((item) => item.isToday);
+  const visibleDays = [];
+  for (let index = Math.max(0, activeIndex - 10); index <= Math.min(days.length - 1, activeIndex + 10); index += 1) {
+    visibleDays.push({ item: days[index], index, offset: index - activeIndex });
+  }
 
-    <svg className="cycle-orbit" viewBox="0 0 380 120" aria-label={`Цикл: день ${day.cycleDay} из ${profile.cycleLength}`}>
+  function select(index: number) {
+    onSelectDay(clampIndex(index, days));
+  }
+
+  function onPointerDown(event: PointerEvent<SVGSVGElement>) {
+    dragStart.current = event.clientX;
+    dragged.current = false;
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function onPointerMove(event: PointerEvent<SVGSVGElement>) {
+    if (dragStart.current == null) return;
+    const distance = Math.max(-MAX_DRAG, Math.min(MAX_DRAG, event.clientX - dragStart.current));
+    if (Math.abs(distance) > 7) dragged.current = true;
+    dragXRef.current = distance;
+    setDragX(distance);
+  }
+
+  function finishDrag() {
+    if (dragStart.current == null) return;
+    const shift = Math.round(-dragXRef.current / DOT_STEP);
+    dragStart.current = null;
+    dragXRef.current = 0;
+    setDragX(0);
+    if (shift !== 0) select(activeIndex + shift);
+  }
+
+  function cancelDrag() {
+    dragStart.current = null;
+    dragXRef.current = 0;
+    dragged.current = false;
+    setDragX(0);
+  }
+
+  function onDialKeyDown(event: KeyboardEvent<SVGSVGElement>) {
+    if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+      event.preventDefault();
+      select(activeIndex + (event.key === "ArrowRight" ? 1 : -1));
+    }
+  }
+
+  function selectDot(index: number) {
+    if (dragged.current) {
+      dragged.current = false;
+      return;
+    }
+    select(index);
+  }
+
+  const customStyle = {
+    "--cycle-color": stage.color,
+    "--dial-offset": `${activeIndex * .72 - dragX * .075}`,
+  } as CSSProperties;
+
+  return <section className={`cycle-hero lotus-stage-${stage.key}`} style={customStyle} aria-labelledby="cycle-title">
+    <div className="cosmic-dust" aria-hidden="true">{Array.from({ length: 42 }, (_, index) => <i key={index} />)}</div>
+
+    <svg
+      className={`cycle-dial${dragX ? " is-dragging" : ""}`}
+      viewBox="0 0 380 142"
+      role="group"
+      tabIndex={0}
+      aria-label={`Календарь цикла. Выбрано: ${relativeDayLabel(day.iso)}, ${day.cycleDay} день цикла. Двигайте влево или вправо.`}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={finishDrag}
+      onPointerCancel={cancelDrag}
+      onKeyDown={onDialKeyDown}
+    >
       <defs>
-        <linearGradient id="orbit-gradient" x1="0" x2="1"><stop stopColor="#ff526d" /><stop offset=".4" stopColor="#9e62ff" /><stop offset=".54" stopColor="#ff60d8" /><stop offset="1" stopColor="#62529a" /></linearGradient>
-        <filter id="orbit-glow" x="-80%" y="-80%" width="260%" height="260%"><feGaussianBlur stdDeviation="4" result="b" /><feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
+        <linearGradient id="dial-gradient" x1="0" x2="1">
+          <stop stopColor="#ff435f" />
+          <stop offset=".34" stopColor="#4fd39a" />
+          <stop offset=".66" stopColor="#48a8ff" />
+          <stop offset="1" stopColor="#c45cff" />
+        </linearGradient>
+        <filter id="dial-glow" x="-150%" y="-150%" width="400%" height="400%">
+          <feGaussianBlur stdDeviation="4" result="blur" />
+          <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+        </filter>
       </defs>
-      <path className="orbit-track" d="M24 91 C89 -1 291 -1 356 91" />
-      <path className="orbit-progress" d={`M24 91 C89 -1 291 -1 356 91`} pathLength="100" style={{ strokeDasharray: `${((day.cycleDay - 1) / Math.max(1, profile.cycleLength - 1)) * 100} 100` }} />
-      {orbit.map((item) => <g key={item.cycleDay} transform={`translate(${item.x} ${item.y})`}>
-        {item.marker === "menstruation" && <circle className="orbit-marker period" r="3.1" />}
-        {item.marker === "fertile" && <circle className="orbit-marker fertile" r="2.7" />}
-        {item.marker === "ovulation" && <path className="orbit-marker ovulation" d="M0 -5 C4 -2 5 2 0 6 C-5 2 -4 -2 0 -5Z" />}
-        {!item.marker && <circle className="orbit-tick" r="1.25" />}
-      </g>)}
-      {active && <g className="active-cycle-orb" transform={`translate(${active.x} ${active.y})`} filter="url(#orbit-glow)">
-        <circle r="16" /><circle r="6" /><text y="-22" textAnchor="middle">{day.isToday ? "сегодня" : relativeDayLabel(day.iso).toLowerCase()}</text>
-      </g>}
+      <path className="cycle-dial-track" d="M-7 119 C68 -7 312 -7 387 119" pathLength="100" />
+      {visibleDays.map(({ item, index, offset }) => {
+        const visualOffset = offset + dragX / DOT_STEP;
+        if (Math.abs(visualOffset) > 9.1) return null;
+        const point = arcPoint(visualOffset);
+        const dotStage = stageForPhase(item.phase);
+        const isActive = index === activeIndex && dragX === 0;
+        const isNear = Math.abs(visualOffset) <= 5.2;
+        const month = item.dayOfMonth === 1 ? MONTH_SHORT.format(item.date).replace(".", "") : "";
+        return <g
+          key={item.iso}
+          className={`dial-date${isActive ? " is-active" : ""}${item.isToday ? " is-today" : ""}`}
+          transform={`translate(${point.x} ${point.y})`}
+          style={{ "--dot-color": dotStage.color, opacity: Math.max(.18, 1 - Math.abs(visualOffset) / 11) } as CSSProperties}
+          role="button"
+          tabIndex={isNear ? 0 : -1}
+          aria-label={`${item.dayOfMonth} ${MONTH_SHORT.format(item.date)}, ${item.cycleDay} день цикла`}
+          onClick={() => selectDot(index)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              selectDot(index);
+            }
+          }}
+        >
+          {isActive ? <circle className="dial-active-halo" r="13" filter="url(#dial-glow)" /> : null}
+          <circle className="dial-date-dot" r={isActive ? 4.8 : item.marker ? 3.1 : 2.05} />
+          {isNear ? <text className="dial-date-number" y="15" textAnchor="middle">{item.dayOfMonth}</text> : null}
+          {month ? <text className="dial-date-month" y="24" textAnchor="middle">{month}</text> : null}
+        </g>;
+      })}
+      <path className="dial-center-pointer" d="M190 50 l-4 7 h8Z" />
     </svg>
 
-    <div className="phase-badge"><span>{relativeDayLabel(day.iso)}</span><strong>{phaseLabel(day.phase)}</strong></div>
+    <button className="cycle-jump previous" type="button" onClick={() => select(activeIndex - profile.cycleLength)} aria-label="Предыдущий цикл">‹</button>
+    <button className="cycle-jump next" type="button" onClick={() => select(activeIndex + profile.cycleLength)} aria-label="Следующий цикл">›</button>
 
-    <svg className="cycle-lotus" viewBox="0 0 380 230" role="img" aria-labelledby="cycle-title cycle-description">
-      <defs>
-        <radialGradient id="lotus-fill"><stop offset="0" stopColor="#ec8fff" stopOpacity=".34" /><stop offset=".62" stopColor={color} stopOpacity=".13" /><stop offset="1" stopColor="#030107" stopOpacity="0" /></radialGradient>
-        <filter id="lotus-glow" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="5" result="b" /><feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
-      </defs>
-      <ellipse className="lotus-aura" cx="190" cy="137" rx="146" ry="105" />
-      <g className="lotus-petals rear" filter="url(#lotus-glow)">
-        <path d="M190 179 C150 164 128 124 141 78 C176 91 191 124 190 179Z" />
-        <path d="M190 179 C230 164 252 124 239 78 C204 91 189 124 190 179Z" />
-        <path d="M166 182 C120 178 83 153 78 112 C118 112 153 136 166 182Z" />
-        <path d="M214 182 C260 178 297 153 302 112 C262 112 227 136 214 182Z" />
-      </g>
-      <g className="lotus-petals front" filter="url(#lotus-glow)">
-        <path d="M190 181 C154 156 151 101 190 58 C229 101 226 156 190 181Z" />
-        <path d="M187 184 C142 188 101 176 73 145 C111 132 155 145 187 184Z" />
-        <path d="M193 184 C238 188 279 176 307 145 C269 132 225 145 193 184Z" />
-        <path d="M190 187 C142 205 98 202 58 175 C100 158 150 163 190 187Z" />
-        <path d="M190 187 C238 205 282 202 322 175 C280 158 230 163 190 187Z" />
-      </g>
-      <text className="lotus-day" x="190" y="137" textAnchor="middle">{day.cycleDay}</text>
-      <text className="lotus-day-label" x="190" y="155" textAnchor="middle">день цикла</text>
-    </svg>
-
-    <div className="cycle-copy">
-      <h1 id="cycle-title">{day.isToday ? `Сегодня — ${phaseLabel(day.phase).toLowerCase()}` : `${relativeDayLabel(day.iso)} · ${phaseLabel(day.phase).toLowerCase()}`}</h1>
-      <p id="cycle-description">{phaseHint(day.phase)}. Это календарный ориентир, не медицинское заключение.</p>
+    <div className="phase-badge" aria-live="polite">
+      <span>{relativeDayLabel(day.iso)}</span>
+      <strong>{day.dayOfMonth} {MONTH_SHORT.format(day.date).replace(".", "")} · день {day.cycleDay}</strong>
     </div>
 
-    <div className="cycle-marker-legend" aria-label="Маркеры цикла">
-      <span><i className="period" />менструация</span>
-      <span><i className="fertile" />фертильное окно</span>
-      <span><i className="ovulation" />овуляция</span>
+    <button className="cycle-settings-button" type="button" onClick={onOpenPeriod} aria-label="Отметить месячные и настроить цикл">
+      <span>{profile.cycleLength} дней</span><i>＋</i>
+    </button>
+
+    <button className="cycle-lotus-button" type="button" onClick={onOpenPeriod} aria-label="Открыть календарь и отметить месячные">
+      <svg className="cycle-lotus" viewBox="0 0 380 230" role="img" aria-labelledby="cycle-title cycle-description">
+        <defs>
+          <radialGradient id="lotus-fill">
+            <stop offset="0" stopColor={stage.color} stopOpacity=".38" />
+            <stop offset=".62" stopColor={stage.color} stopOpacity=".12" />
+            <stop offset="1" stopColor="#030107" stopOpacity="0" />
+          </radialGradient>
+          <linearGradient id="petal-fill" x1="0" y1="0" x2="0" y2="1">
+            <stop stopColor={stage.color} stopOpacity=".28" />
+            <stop offset="1" stopColor={stage.color} stopOpacity=".035" />
+          </linearGradient>
+          <filter id="lotus-glow" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="5" result="blur" />
+            <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+          </filter>
+        </defs>
+        <ellipse className="lotus-aura" cx="190" cy="135" rx="150" ry="108" />
+        <g className={`lotus-bloom bloom-${stage.petals}`} filter="url(#lotus-glow)">
+          <path className={`lotus-petal outer left${stage.petals >= 7 ? " is-visible" : ""}`} d="M190 191 C137 211 84 204 43 171 C96 153 151 163 190 191Z" />
+          <path className={`lotus-petal outer right${stage.petals >= 7 ? " is-visible" : ""}`} d="M190 191 C243 211 296 204 337 171 C284 153 229 163 190 191Z" />
+          <path className={`lotus-petal middle left${stage.petals >= 5 ? " is-visible" : ""}`} d="M185 188 C133 191 91 165 78 123 C124 120 164 146 185 188Z" />
+          <path className={`lotus-petal middle right${stage.petals >= 5 ? " is-visible" : ""}`} d="M195 188 C247 191 289 165 302 123 C256 120 216 146 195 188Z" />
+          <path className={`lotus-petal inner left${stage.petals >= 3 ? " is-visible" : ""}`} d="M188 186 C145 174 119 132 128 88 C166 99 188 137 188 186Z" />
+          <path className={`lotus-petal inner right${stage.petals >= 3 ? " is-visible" : ""}`} d="M192 186 C235 174 261 132 252 88 C214 99 192 137 192 186Z" />
+          <path className="lotus-petal center is-visible" d="M190 188 C151 158 153 88 190 42 C227 88 229 158 190 188Z" />
+        </g>
+        <text className="lotus-day" x="190" y="130" textAnchor="middle">{day.cycleDay}</text>
+        <text className="lotus-day-label" x="190" y="149" textAnchor="middle">день цикла</text>
+      </svg>
+      <span className="lotus-tap-hint"><i />нажмите, чтобы отметить месячные</span>
+    </button>
+
+    <div className="cycle-copy">
+      <p className="cycle-stage-count">{stage.petals} из 7 лепестков</p>
+      <h1 id="cycle-title">{day.isToday ? `Сегодня — ${stage.label.toLowerCase()}` : `${relativeDayLabel(day.iso)} · ${stage.label.toLowerCase()}`}</h1>
+      <p id="cycle-description">{stage.description}. {phaseHint(day.phase)} — ориентировочный календарный расчёт.</p>
+      {!day.isToday && todayIndex >= 0 ? <button className="return-today" type="button" onClick={() => select(todayIndex)}>вернуться к сегодня</button> : null}
+    </div>
+
+    <div className="cycle-stage-legend" aria-label="Раскрытие лотоса по фазам цикла">
+      {Object.values(STAGES).map((item) => <span key={item.key} className={item.key === stage.key ? "is-active" : ""} title={item.label}><i style={{ background: item.color }} /><b>{item.petals}</b></span>)}
     </div>
   </section>;
 }

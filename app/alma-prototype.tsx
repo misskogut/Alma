@@ -8,11 +8,11 @@ import { ConnectionsSheet, CycleSettingsSheet, DaySheet } from "../components/sh
 import SymptomCheck from "../components/symptom-check";
 import WaveChart from "../components/wave-chart";
 import type { AlmaProfile, ContextKey, EnvironmentPayload, SymptomEntry, SyncMode, ZoneKey, ZoneValues } from "../lib/alma";
-import { DEFAULT_SYMPTOMS, ZONE_META, addDays, buildDayModels, defaultProfile, defaultState, formatShortDate, phaseLabel, relativeDayLabel, todayIso } from "../lib/alma";
+import { DEFAULT_SYMPTOMS, TIMELINE_RADIUS, ZONE_META, addDays, buildDayModels, defaultProfile, defaultState, formatShortDate, phaseLabel, relativeDayLabel, todayIso } from "../lib/alma";
 import { bootstrapCloud, saveCloudEnvironment, saveCloudProfile, saveCloudState, saveCloudSymptom } from "../lib/supabase";
 
 const STORAGE_KEY = "alma-observation-v2";
-const TODAY_INDEX = 14;
+const TODAY_INDEX = TIMELINE_RADIUS;
 
 type LocalSnapshot = {
   profile: AlmaProfile;
@@ -189,8 +189,12 @@ export default function AlmaPrototype() {
     });
   }
 
+  function selectDay(index: number) {
+    setActiveIndex(Math.max(0, Math.min(days.length - 1, index)));
+  }
+
   function openDay(index: number) {
-    setActiveIndex(index);
+    selectDay(index);
     setDaySheetOpen(true);
   }
 
@@ -218,8 +222,12 @@ export default function AlmaPrototype() {
     if (userId) saveCloudSymptom(userId, activeDay.iso, symptom).catch(() => setSyncMode("local"));
   }
 
-  function saveProfile(next: AlmaProfile) {
+  function saveProfile(next: AlmaProfile, focusIso?: string) {
     setProfile(next);
+    if (focusIso) {
+      const focusIndex = days.findIndex((item) => item.iso === focusIso);
+      if (focusIndex >= 0) setActiveIndex(focusIndex);
+    }
     setCycleSettingsOpen(false);
     if (userId) saveCloudProfile(userId, next).catch(() => setSyncMode("local"));
   }
@@ -240,7 +248,7 @@ export default function AlmaPrototype() {
         </button>
       </header>
 
-      <CycleHero profile={profile} day={activeDay} onOpenSettings={() => setCycleSettingsOpen(true)} />
+      <CycleHero profile={profile} days={days} activeIndex={activeIndex} onSelectDay={selectDay} onOpenPeriod={() => setCycleSettingsOpen(true)} />
 
       <section className="wave-section" aria-labelledby="wave-title">
         <header className="wave-section-header">
@@ -252,7 +260,7 @@ export default function AlmaPrototype() {
           {(Object.keys(ZONE_META) as ZoneKey[]).map((zone) => <button key={zone} type="button" className={internalWaves.has(zone) ? "is-active" : ""} onClick={() => toggleInternalWave(zone)}><i style={{ background: ZONE_META[zone].color }} />{ZONE_META[zone].label}<b>{internalWaves.has(zone) ? "✓" : "+"}</b></button>)}
           <small>Формула общей волны в прототипе предварительная; внешние среды в неё не входят.</small>
         </div>}
-        <WaveChart days={days} activeIndex={activeIndex} activeContexts={activeContexts} internalWaves={internalWaves} environment={environment} confirmedCount={confirmedCount} onSelectDay={setActiveIndex} onOpenDay={openDay} />
+        <WaveChart days={days} activeIndex={activeIndex} activeContexts={activeContexts} internalWaves={internalWaves} environment={environment} confirmedCount={confirmedCount} onSelectDay={selectDay} onOpenDay={openDay} />
       </section>
 
       <ContextStrip environment={environment} activeContexts={activeContexts} onToggle={toggleContext} />
@@ -276,7 +284,7 @@ export default function AlmaPrototype() {
       <footer className="app-footer"><p>Observation, not prescription</p><span>ALMA показывает совпадения и вероятный фон, не диагноз и не лечение.</span><i /></footer>
     </div>
 
-    {cycleSettingsOpen && <CycleSettingsSheet profile={profile} onSave={saveProfile} onClose={() => setCycleSettingsOpen(false)} />}
+    {cycleSettingsOpen && <CycleSettingsSheet profile={profile} activeIso={activeDay.iso} onSave={saveProfile} onClose={() => setCycleSettingsOpen(false)} />}
     {daySheetOpen && <DaySheet day={activeDay} environment={environment} symptoms={activeSymptoms} onClose={() => setDaySheetOpen(false)} />}
     {connectionsOpen && <ConnectionsSheet day={activeDay} environment={environment} onClose={() => setConnectionsOpen(false)} />}
   </main>;

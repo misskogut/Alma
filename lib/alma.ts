@@ -84,6 +84,7 @@ export const DEFAULT_SYMPTOMS: SymptomEntry[] = [
 ];
 
 const DAY_MS = 86_400_000;
+export const TIMELINE_RADIUS = 180;
 
 export function clamp(value: number, min = -100, max = 100) {
   return Math.max(min, Math.min(max, value));
@@ -202,9 +203,9 @@ export function provisionalIntegral(values: ZoneValues) {
   return Math.round((values.cognitive + values.emotional + values.physical + values.libido + values.social) / 5);
 }
 
-export function buildDayModels(profile: AlmaProfile, stateByDate: Record<string, ZoneValues>, currentIso = todayIso()) {
-  return Array.from({ length: 29 }, (_, index): DayModel => {
-    const offset = index - 14;
+export function buildDayModels(profile: AlmaProfile, stateByDate: Record<string, ZoneValues>, currentIso = todayIso(), radius = TIMELINE_RADIUS) {
+  return Array.from({ length: radius * 2 + 1 }, (_, index): DayModel => {
+    const offset = index - radius;
     const iso = addDays(currentIso, offset);
     const date = dateFromIso(iso);
     const cycleDay = getCycleDay(iso, profile);
