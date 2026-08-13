@@ -46,8 +46,13 @@ const STAGES: Record<LotusStage["key"], LotusStage> = {
 
 const MONTH_SHORT = new Intl.DateTimeFormat("ru-RU", { month: "short", timeZone: "UTC" });
 const DOT_STEP = 35;
-const MAX_DRAG = DOT_STEP * 6;
-const LOTUS_PETAL_PATH = "M190 32 C165 65 143 104 142 138 C141 167 157 187 190 201 C223 187 239 167 238 138 C237 104 215 65 190 32Z";
+const LOTUS_PETAL_PATH = "M190 27 C159 64 141 103 142 138 C143 172 166 200 190 200 C214 200 237 172 238 138 C239 103 221 64 190 27Z";
+const SELECTOR_PHASE: Record<LotusStage["key"], string> = {
+  menstruation: "Месячные",
+  low: "Низкая фаза",
+  follicular: "Фолликул.",
+  ovulation: "Овуляция",
+};
 
 function stageForPhase(phase: CyclePhase) {
   if (phase === "menstruation") return STAGES.menstruation;
@@ -88,9 +93,14 @@ export default function CycleHero({
   const dragXRef = useRef(0);
   const dragStart = useRef<number | null>(null);
   const dragged = useRef(false);
+  const dragFrame = useRef<number | null>(null);
   const todayIndex = days.findIndex((item) => item.isToday);
+  const previewShift = Math.round(-dragX / DOT_STEP);
+  const previewIndex = clampIndex(activeIndex + previewShift, days);
+  const previewDay = days[previewIndex];
+  const previewStage = stageForPhase(previewDay.phase);
   const visibleDays = [];
-  for (let index = Math.max(0, activeIndex - 8); index <= Math.min(days.length - 1, activeIndex + 8); index += 1) {
+  for (let index = Math.max(0, previewIndex - 8); index <= Math.min(days.length - 1, previewIndex + 8); index += 1) {
     visibleDays.push({ item: days[index], index, offset: index - activeIndex });
   }
 
@@ -106,15 +116,25 @@ export default function CycleHero({
 
   function onPointerMove(event: PointerEvent<SVGSVGElement>) {
     if (dragStart.current == null) return;
-    const distance = Math.max(-MAX_DRAG, Math.min(MAX_DRAG, event.clientX - dragStart.current));
+    const rawDistance = event.clientX - dragStart.current;
+    const minDistance = -(days.length - 1 - activeIndex) * DOT_STEP;
+    const maxDistance = activeIndex * DOT_STEP;
+    const distance = Math.max(minDistance, Math.min(maxDistance, rawDistance));
     if (Math.abs(distance) > 7) dragged.current = true;
     dragXRef.current = distance;
-    setDragX(distance);
+    if (dragFrame.current == null) {
+      dragFrame.current = requestAnimationFrame(() => {
+        setDragX(dragXRef.current);
+        dragFrame.current = null;
+      });
+    }
   }
 
   function finishDrag() {
     if (dragStart.current == null) return;
     const shift = Math.round(-dragXRef.current / DOT_STEP);
+    if (dragFrame.current != null) cancelAnimationFrame(dragFrame.current);
+    dragFrame.current = null;
     dragStart.current = null;
     dragXRef.current = 0;
     setDragX(0);
@@ -122,6 +142,8 @@ export default function CycleHero({
   }
 
   function cancelDrag() {
+    if (dragFrame.current != null) cancelAnimationFrame(dragFrame.current);
+    dragFrame.current = null;
     dragStart.current = null;
     dragXRef.current = 0;
     dragged.current = false;
@@ -173,16 +195,16 @@ export default function CycleHero({
         if (Math.abs(visualOffset) > 6.45) return null;
         const point = arcPoint(visualOffset);
         const dotStage = stageForPhase(item.phase);
-        const isActive = index === activeIndex && dragX === 0;
         const isNear = Math.abs(visualOffset) <= 6.45;
         const month = item.dayOfMonth === 1 ? MONTH_SHORT.format(item.date).replace(".", "") : "";
         return <g
           key={item.iso}
-          className={`dial-date${isActive ? " is-active" : ""}${item.isToday ? " is-today" : ""}`}
+          className={`dial-date${index === activeIndex ? " is-selected" : ""}${item.isToday ? " is-today" : ""}`}
           transform={`translate(${point.x} ${point.y})`}
           style={{ "--dot-color": dotStage.color, opacity: Math.max(.18, 1 - Math.abs(visualOffset) / 11) } as CSSProperties}
           role="button"
           tabIndex={isNear ? 0 : -1}
+          aria-current={index === activeIndex ? "date" : undefined}
           aria-label={`${item.dayOfMonth} ${MONTH_SHORT.format(item.date)}, ${item.cycleDay} день цикла`}
           onClick={() => selectDot(index)}
           onKeyDown={(event) => {
@@ -192,12 +214,18 @@ export default function CycleHero({
             }
           }}
         >
-          {isActive ? <circle className="dial-active-halo" r="13" filter="url(#dial-glow)" /> : null}
-          <circle className="dial-date-dot" r={isActive ? 5.2 : item.marker ? 3.35 : 2.45} />
+          <circle className="dial-date-dot" r={item.marker ? 3.35 : 2.45} />
           {isNear ? <text className="dial-date-number" y="15" textAnchor="middle">{item.dayOfMonth}</text> : null}
           {month ? <text className="dial-date-month" y="24" textAnchor="middle">{month}</text> : null}
         </g>;
       })}
+      <g className="dial-selector" transform="translate(190 29)" style={{ "--selector-color": previewStage.color } as CSSProperties} aria-hidden="true">
+        <circle className="dial-selector-aura" r="26" filter="url(#dial-glow)" />
+        <circle className="dial-selector-core" r="22" />
+        <text className="dial-selector-date" y="-9" textAnchor="middle">{previewDay.isToday ? "Сегодня" : `${previewDay.dayOfMonth} ${MONTH_SHORT.format(previewDay.date).replace(".", "")}`}</text>
+        <text className="dial-selector-phase" y="2" textAnchor="middle">{SELECTOR_PHASE[previewStage.key]}</text>
+        <text className="dial-selector-cycle" y="12" textAnchor="middle">день цикла {previewDay.cycleDay}</text>
+      </g>
     </svg>
 
     <button className="cycle-jump previous" type="button" onClick={() => select(activeIndex - profile.cycleLength)} aria-label="Предыдущий цикл">‹</button>
@@ -205,7 +233,7 @@ export default function CycleHero({
 
     <div className="phase-badge" aria-live="polite">
       <span>{relativeDayLabel(day.iso)}</span>
-      <strong>{day.dayOfMonth} {MONTH_SHORT.format(day.date).replace(".", "")} · день {day.cycleDay}</strong>
+      <strong>{day.dayOfMonth} {MONTH_SHORT.format(day.date).replace(".", "")} · {stage.label.toLowerCase()}</strong>
     </div>
 
     <button className="cycle-settings-button" type="button" onClick={onOpenPeriod} aria-label="Отметить месячные и настроить цикл">
@@ -221,14 +249,16 @@ export default function CycleHero({
             <stop offset="1" stopColor="#030107" stopOpacity="0" />
           </radialGradient>
           <linearGradient id="petal-fill" x1="0" y1="0" x2="0" y2="1">
-            <stop stopColor={stage.color} stopOpacity=".28" />
-            <stop offset="1" stopColor={stage.color} stopOpacity=".035" />
+            <stop stopColor={stage.color} />
+            <stop offset=".42" stopColor={stage.color} />
+            <stop offset=".82" stopColor="#120718" />
+            <stop offset="1" stopColor="#050108" />
           </linearGradient>
           <radialGradient id="drop-fill" cx="50%" cy="35%" r="72%">
-            <stop stopColor={stage.color} stopOpacity=".88" />
-            <stop offset=".48" stopColor={stage.color} stopOpacity=".52" />
-            <stop offset=".82" stopColor="#100817" stopOpacity=".92" />
-            <stop offset="1" stopColor="#050108" stopOpacity=".98" />
+            <stop stopColor={stage.color} />
+            <stop offset=".48" stopColor={stage.color} />
+            <stop offset=".82" stopColor="#100817" />
+            <stop offset="1" stopColor="#050108" />
           </radialGradient>
           <filter id="lotus-glow" x="-50%" y="-50%" width="200%" height="200%">
             <feGaussianBlur stdDeviation="5" result="blur" />
@@ -244,7 +274,7 @@ export default function CycleHero({
           <path className={`lotus-petal inner left${stage.petals >= 3 ? " is-visible" : ""}`} d={LOTUS_PETAL_PATH} />
           <path className={`lotus-petal inner right${stage.petals >= 3 ? " is-visible" : ""}`} d={LOTUS_PETAL_PATH} />
           <path className="lotus-petal lotus-drop center is-visible" d={LOTUS_PETAL_PATH} />
-          <path className="lotus-drop-shine" d="M171 77 C159 101 155 126 160 148" />
+          <path className="lotus-drop-shine" d="M171 76 C159 101 155 127 160 151" />
         </g>
         <text className="lotus-day" x="190" y="130" textAnchor="middle">{day.cycleDay}</text>
         <text className="lotus-day-label" x="190" y="149" textAnchor="middle">день цикла</text>

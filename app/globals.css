@@ -50,17 +50,21 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 1px solid 
 .cosmic-dust i:nth-child(4n) { width: 3px; height: 3px; opacity: .65; transform: translate(-11px, 17px); animation-delay: -2.2s; }
 .cosmic-dust i:nth-child(5n) { transform: translate(7px, 29px); animation-delay: -.8s; }
 .cycle-dial { width: 100%; height: 154px; position: absolute; z-index: 8; top: 0; left: 0; overflow: visible; touch-action: pan-y; user-select: none; cursor: grab; }
+.cycle-dial:focus { outline: none; }
 .cycle-dial:focus-visible { outline: none; }
-.cycle-dial:focus-visible .dial-active-halo { stroke-width: 1.6; }
+.cycle-dial:focus-visible .dial-selector-core { stroke-width: 1.8; }
 .cycle-dial.is-dragging { cursor: grabbing; }
-.dial-date { cursor: pointer; }
-.dial-date-dot { fill: var(--dot-color); opacity: .82; filter: drop-shadow(0 0 5px var(--dot-color)); transition: r .2s ease, opacity .2s ease; }
+.dial-date { cursor: pointer; will-change: transform; }
+.dial-date-dot { fill: var(--dot-color); opacity: .82; filter: drop-shadow(0 0 5px var(--dot-color)); }
 .dial-date-number { fill: #6e6475; font-size: 7px; font-weight: 500; }
 .dial-date-month { fill: #493f4e; font-size: 5.5px; letter-spacing: .06em; text-transform: uppercase; }
-.dial-date.is-today:not(.is-active) .dial-date-dot { stroke: #f4eafa; stroke-width: 1; }
-.dial-date.is-active .dial-date-dot { fill: #fff; stroke: var(--cycle-color); stroke-width: 2.2; opacity: 1; }
-.dial-date.is-active .dial-date-number { fill: #f3eaf6; font-size: 8px; }
-.dial-active-halo { fill: color-mix(in srgb, var(--cycle-color) 13%, transparent); stroke: color-mix(in srgb, var(--cycle-color) 76%, white 24%); stroke-width: 1; }
+.dial-date.is-today .dial-date-dot { stroke: #f4eafa; stroke-width: 1; }
+.dial-selector { pointer-events: none; --selector-color: var(--cycle-color); }
+.dial-selector-aura { fill: color-mix(in srgb, var(--selector-color) 16%, transparent); stroke: color-mix(in srgb, var(--selector-color) 78%, white 22%); stroke-width: 1; }
+.dial-selector-core { fill: #07030b; stroke: color-mix(in srgb, var(--selector-color) 82%, white 18%); stroke-width: 1.25; transition: stroke .18s ease, fill .18s ease; }
+.dial-selector-date { fill: #8f8396; font-size: 5px; font-weight: 500; }
+.dial-selector-phase { fill: #fff; font-size: 7.2px; font-weight: 560; letter-spacing: -.02em; }
+.dial-selector-cycle { fill: color-mix(in srgb, var(--selector-color) 70%, #a49aa8 30%); font-size: 4.5px; letter-spacing: .01em; }
 .cycle-jump { width: 31px; height: 31px; position: absolute; z-index: 12; top: 69px; display: grid; place-items: center; border: 1px solid rgba(255, 255, 255, .065); border-radius: 50%; background: rgba(5, 3, 9, .66); color: #807487; font-size: 20px; line-height: 1; cursor: pointer; backdrop-filter: blur(10px); }
 .cycle-jump.previous { left: 13px; }.cycle-jump.next { right: 13px; }
 .phase-badge { min-width: 132px; position: absolute; z-index: 11; top: 65px; left: 50%; transform: translateX(-50%); padding: 8px 14px 9px; border: 1px solid color-mix(in srgb, var(--cycle-color) 68%, white 11%); border-radius: 999px; background: rgba(7, 3, 11, .82); text-align: center; box-shadow: 0 0 27px color-mix(in srgb, var(--cycle-color) 22%, transparent), inset 0 0 15px color-mix(in srgb, var(--cycle-color) 7%, transparent); backdrop-filter: blur(12px); }
@@ -73,18 +77,21 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 1px solid 
 .cycle-lotus-button:active .cycle-lotus { transform: scale(.985); }
 .cycle-lotus { width: 100%; height: 250px; display: block; overflow: visible; transition: transform .22s ease; }
 .lotus-aura { fill: url(#lotus-fill); }
-.lotus-bloom { transform-origin: 190px 201px; }
-.lotus-petal { --fan-angle: 0deg; fill: url(#petal-fill); stroke: color-mix(in srgb, var(--cycle-color) 84%, white 16%); stroke-width: 1.55; opacity: 0; transform: rotate(0deg) scale(.985); transform-box: view-box; transform-origin: 190px 201px; will-change: transform, opacity; transition-property: opacity, transform, stroke; transition-duration: .2s, .9s, .45s; transition-timing-function: ease, cubic-bezier(.16, .9, .22, 1.06), ease; transition-delay: var(--close-delay, 0s); }
+.lotus-bloom { isolation: isolate; transform-origin: 190px 200px; }
+.lotus-petal { --fan-angle: 0deg; fill: url(#petal-fill); stroke: color-mix(in srgb, var(--cycle-color) 84%, white 16%); stroke-width: 1.55; opacity: 1; transform: rotate(0deg); transform-box: view-box; transform-origin: 190px 200px; will-change: transform; transition: transform .9s cubic-bezier(.16, .9, .22, 1.06), stroke .45s ease; transition-delay: var(--close-delay, 0s); }
 .lotus-petal.inner { --open-delay: .04s; --close-delay: .18s; }
 .lotus-petal.middle { --open-delay: .12s; --close-delay: .09s; }
 .lotus-petal.outer { --open-delay: .2s; --close-delay: .02s; }
-.lotus-petal.inner.left { --fan-angle: -24deg; }
-.lotus-petal.inner.right { --fan-angle: 24deg; }
-.lotus-petal.middle.left { --fan-angle: -49deg; }
-.lotus-petal.middle.right { --fan-angle: 49deg; }
-.lotus-petal.outer.left { --fan-angle: -74deg; }
-.lotus-petal.outer.right { --fan-angle: 74deg; }
-.lotus-bloom .lotus-petal.is-visible { opacity: 1; transform: rotate(var(--fan-angle)) scale(1); transition-delay: var(--open-delay, 0s); }
+.lotus-petal.inner { filter: brightness(.88) saturate(.96); }
+.lotus-petal.middle { filter: brightness(.75) saturate(.9); }
+.lotus-petal.outer { filter: brightness(.62) saturate(.84); }
+.lotus-petal.inner.left { --fan-angle: -27deg; }
+.lotus-petal.inner.right { --fan-angle: 27deg; }
+.lotus-petal.middle.left { --fan-angle: -52deg; }
+.lotus-petal.middle.right { --fan-angle: 52deg; }
+.lotus-petal.outer.left { --fan-angle: -76deg; }
+.lotus-petal.outer.right { --fan-angle: 76deg; }
+.lotus-bloom .lotus-petal.is-visible { transform: rotate(var(--fan-angle)); transition-delay: var(--open-delay, 0s); }
 .lotus-petal.lotus-drop { --fan-angle: 0deg; fill: url(#drop-fill); stroke-width: 1.85; transition-delay: 0s; }
 .lotus-drop-shine { fill: none; stroke: rgba(255, 255, 255, .48); stroke-width: 1.1; stroke-linecap: round; opacity: .2; filter: drop-shadow(0 0 4px rgba(255, 255, 255, .28)); transition: opacity .45s ease; }
 .lotus-stage-menstruation .lotus-drop-shine { opacity: .46; animation: drop-shimmer 3.2s ease-in-out infinite; }
