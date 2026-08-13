@@ -2,7 +2,7 @@
 
 Мобильный web-прототип персональной системы наблюдения и интерпретации состояния во времени.
 
-<!-- deploy-trigger: 2026-08-13 inertia-dbeeb46 -->
+<!-- deploy-trigger: 2026-08-13 git-connected-test-0709 -->
 
 ## Run locally
 
