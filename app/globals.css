@@ -49,7 +49,7 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 1px solid 
 .cosmic-dust i:nth-child(3n) { width: 1px; height: 1px; opacity: .38; transform: translate(19px, -14px); animation-delay: -1.4s; }
 .cosmic-dust i:nth-child(4n) { width: 3px; height: 3px; opacity: .65; transform: translate(-11px, 17px); animation-delay: -2.2s; }
 .cosmic-dust i:nth-child(5n) { transform: translate(7px, 29px); animation-delay: -.8s; }
-.cycle-dial { width: 100%; height: 154px; position: absolute; z-index: 8; top: 0; left: 0; overflow: visible; touch-action: pan-y; user-select: none; cursor: grab; }
+.cycle-dial { width: 100%; height: 154px; position: absolute; z-index: 8; top: 0; left: 0; overflow: visible; touch-action: none; overscroll-behavior: contain; user-select: none; cursor: grab; }
 .cycle-dial:focus { outline: none; }
 .cycle-dial:focus-visible { outline: none; }
 .cycle-dial:focus-visible .dial-selector-core { stroke-width: 1.8; }
@@ -77,22 +77,21 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 1px solid 
 .cycle-lotus-button:active .cycle-lotus { transform: scale(.985); }
 .cycle-lotus { width: 100%; height: 250px; display: block; overflow: visible; transition: transform .22s ease; }
 .lotus-aura { fill: url(#lotus-fill); }
-.lotus-bloom { isolation: isolate; transform-origin: 190px 200px; }
-.lotus-petal { --fan-angle: 0deg; fill: url(#petal-fill); stroke: color-mix(in srgb, var(--cycle-color) 84%, white 16%); stroke-width: 1.55; opacity: 1; transform: rotate(0deg); transform-box: view-box; transform-origin: 190px 200px; will-change: transform; transition: transform .9s cubic-bezier(.16, .9, .22, 1.06), stroke .45s ease; transition-delay: var(--close-delay, 0s); }
-.lotus-petal.inner { --open-delay: .04s; --close-delay: .18s; }
-.lotus-petal.middle { --open-delay: .12s; --close-delay: .09s; }
-.lotus-petal.outer { --open-delay: .2s; --close-delay: .02s; }
+.lotus-bloom { --outer-left: 0deg; --outer-right: 0deg; --middle-left: 0deg; --middle-right: 0deg; --inner-left: 0deg; --inner-right: 0deg; isolation: isolate; transform-origin: 190px 200px; }
+.lotus-bloom.bloom-3 { --outer-left: -27deg; --outer-right: 27deg; --middle-left: -27deg; --middle-right: 27deg; --inner-left: -27deg; --inner-right: 27deg; }
+.lotus-bloom.bloom-5 { --outer-left: -52deg; --outer-right: 52deg; --middle-left: -52deg; --middle-right: 52deg; --inner-left: -27deg; --inner-right: 27deg; }
+.lotus-bloom.bloom-7 { --outer-left: -76deg; --outer-right: 76deg; --middle-left: -52deg; --middle-right: 52deg; --inner-left: -27deg; --inner-right: 27deg; }
+.lotus-petal { fill: url(#petal-fill); stroke: color-mix(in srgb, var(--cycle-color) 84%, white 16%); stroke-width: 1.55; opacity: 1; transform-box: view-box; transform-origin: 190px 200px; will-change: transform; transition: transform .44s cubic-bezier(.2, .82, .24, 1), stroke .22s ease; }
 .lotus-petal.inner { filter: brightness(.88) saturate(.96); }
 .lotus-petal.middle { filter: brightness(.75) saturate(.9); }
 .lotus-petal.outer { filter: brightness(.62) saturate(.84); }
-.lotus-petal.inner.left { --fan-angle: -27deg; }
-.lotus-petal.inner.right { --fan-angle: 27deg; }
-.lotus-petal.middle.left { --fan-angle: -52deg; }
-.lotus-petal.middle.right { --fan-angle: 52deg; }
-.lotus-petal.outer.left { --fan-angle: -76deg; }
-.lotus-petal.outer.right { --fan-angle: 76deg; }
-.lotus-bloom .lotus-petal.is-visible { transform: rotate(var(--fan-angle)); transition-delay: var(--open-delay, 0s); }
-.lotus-petal.lotus-drop { --fan-angle: 0deg; fill: url(#drop-fill); stroke-width: 1.85; transition-delay: 0s; }
+.lotus-petal.outer.left { transform: rotate(var(--outer-left)); }
+.lotus-petal.outer.right { transform: rotate(var(--outer-right)); }
+.lotus-petal.middle.left { transform: rotate(var(--middle-left)); }
+.lotus-petal.middle.right { transform: rotate(var(--middle-right)); }
+.lotus-petal.inner.left { transform: rotate(var(--inner-left)); }
+.lotus-petal.inner.right { transform: rotate(var(--inner-right)); }
+.lotus-petal.lotus-drop { fill: url(#drop-fill); stroke-width: 1.85; transform: rotate(0deg); }
 .lotus-drop-shine { fill: none; stroke: rgba(255, 255, 255, .48); stroke-width: 1.1; stroke-linecap: round; opacity: .2; filter: drop-shadow(0 0 4px rgba(255, 255, 255, .28)); transition: opacity .45s ease; }
 .lotus-stage-menstruation .lotus-drop-shine { opacity: .46; animation: drop-shimmer 3.2s ease-in-out infinite; }
 .lotus-day { fill: #f8f1fa; font-size: 37px; font-weight: 360; letter-spacing: -.05em; filter: drop-shadow(0 0 10px rgba(255, 255, 255, .18)); }

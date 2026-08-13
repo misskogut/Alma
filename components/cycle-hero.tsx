@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { CSSProperties, KeyboardEvent, PointerEvent } from "react";
 import type { AlmaProfile, CyclePhase, DayModel } from "../lib/alma";
 import { phaseHint, relativeDayLabel } from "../lib/alma";
@@ -46,6 +46,7 @@ const STAGES: Record<LotusStage["key"], LotusStage> = {
 
 const MONTH_SHORT = new Intl.DateTimeFormat("ru-RU", { month: "short", timeZone: "UTC" });
 const DOT_STEP = 35;
+const DIAL_BUFFER_RADIUS = 24;
 const LOTUS_PETAL_PATH = "M190 27 C159 64 141 103 142 138 C143 172 166 200 190 200 C214 200 237 172 238 138 C239 103 221 64 190 27Z";
 const SELECTOR_PHASE: Record<LotusStage["key"], string> = {
   menstruation: "Месячные",
@@ -87,21 +88,89 @@ export default function CycleHero({
   onSelectDay: (index: number) => void;
   onOpenPeriod: () => void;
 }) {
-  const day = days[activeIndex];
-  const stage = stageForPhase(day.phase);
-  const [dragX, setDragX] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const [previewIndexState, setPreviewIndexState] = useState(activeIndex);
   const dragXRef = useRef(0);
   const dragStart = useRef<number | null>(null);
   const dragged = useRef(false);
   const dragFrame = useRef<number | null>(null);
+  const previewIndexRef = useRef(activeIndex);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const dialDateRefs = useRef(new Map<number, SVGGElement>());
   const todayIndex = days.findIndex((item) => item.isToday);
-  const previewShift = Math.round(-dragX / DOT_STEP);
-  const previewIndex = clampIndex(activeIndex + previewShift, days);
+  const previewIndex = isDragging ? clampIndex(previewIndexState, days) : activeIndex;
   const previewDay = days[previewIndex];
   const previewStage = stageForPhase(previewDay.phase);
-  const visibleDays = [];
-  for (let index = Math.max(0, previewIndex - 8); index <= Math.min(days.length - 1, previewIndex + 8); index += 1) {
+  const visibleDays: Array<{ item: DayModel; index: number; offset: number }> = [];
+  for (let index = Math.max(0, activeIndex - DIAL_BUFFER_RADIUS); index <= Math.min(days.length - 1, activeIndex + DIAL_BUFFER_RADIUS); index += 1) {
     visibleDays.push({ item: days[index], index, offset: index - activeIndex });
+  }
+
+  useEffect(() => {
+    if (!isDragging) {
+      previewIndexRef.current = activeIndex;
+      setPreviewIndexState(activeIndex);
+    }
+  }, [activeIndex, isDragging]);
+
+  useEffect(() => () => {
+    if (dragFrame.current != null) cancelAnimationFrame(dragFrame.current);
+    if (audioContextRef.current) void audioContextRef.current.close();
+  }, []);
+
+  function getAudioContext() {
+    if (typeof window === "undefined") return null;
+    const AudioContextClass = window.AudioContext
+      ?? (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AudioContextClass) return null;
+    if (!audioContextRef.current) audioContextRef.current = new AudioContextClass();
+    if (audioContextRef.current.state === "suspended") void audioContextRef.current.resume();
+    return audioContextRef.current;
+  }
+
+  function scheduleDateClick(delay = 0) {
+    const context = getAudioContext();
+    if (!context) return;
+    const start = context.currentTime + delay;
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    oscillator.type = "triangle";
+    oscillator.frequency.setValueAtTime(920, start);
+    oscillator.frequency.exponentialRampToValueAtTime(460, start + .026);
+    gain.gain.setValueAtTime(.0001, start);
+    gain.gain.exponentialRampToValueAtTime(.032, start + .002);
+    gain.gain.exponentialRampToValueAtTime(.0001, start + .034);
+    oscillator.connect(gain);
+    gain.connect(context.destination);
+    oscillator.start(start);
+    oscillator.stop(start + .036);
+  }
+
+  function clickCrossedDates(fromIndex: number, toIndex: number) {
+    const crossings = Math.min(24, Math.abs(toIndex - fromIndex));
+    for (let index = 0; index < crossings; index += 1) scheduleDateClick(index * .014);
+  }
+
+  function paintDial(distance: number) {
+    for (const { index, offset } of visibleDays) {
+      const element = dialDateRefs.current.get(index);
+      if (!element) continue;
+      const visualOffset = offset + distance / DOT_STEP;
+      const isVisible = Math.abs(visualOffset) <= 6.45;
+      if (!isVisible) {
+        element.style.opacity = "0";
+        element.style.visibility = "hidden";
+        element.style.pointerEvents = "none";
+        element.setAttribute("tabindex", "-1");
+        continue;
+      }
+      const point = arcPoint(visualOffset);
+      element.setAttribute("transform", `translate(${point.x} ${point.y})`);
+      element.style.opacity = String(Math.max(.18, 1 - Math.abs(visualOffset) / 11));
+      element.style.visibility = "visible";
+      element.style.pointerEvents = "auto";
+      element.setAttribute("tabindex", "0");
+    }
   }
 
   function select(index: number) {
@@ -109,13 +178,19 @@ export default function CycleHero({
   }
 
   function onPointerDown(event: PointerEvent<SVGSVGElement>) {
+    event.preventDefault();
+    getAudioContext();
     dragStart.current = event.clientX;
     dragged.current = false;
+    previewIndexRef.current = activeIndex;
+    setPreviewIndexState(activeIndex);
+    setIsDragging(true);
     event.currentTarget.setPointerCapture(event.pointerId);
   }
 
   function onPointerMove(event: PointerEvent<SVGSVGElement>) {
     if (dragStart.current == null) return;
+    event.preventDefault();
     const rawDistance = event.clientX - dragStart.current;
     const minDistance = -(days.length - 1 - activeIndex) * DOT_STEP;
     const maxDistance = activeIndex * DOT_STEP;
@@ -124,7 +199,14 @@ export default function CycleHero({
     dragXRef.current = distance;
     if (dragFrame.current == null) {
       dragFrame.current = requestAnimationFrame(() => {
-        setDragX(dragXRef.current);
+        const nextDragX = dragXRef.current;
+        const nextIndex = clampIndex(activeIndex + Math.round(-nextDragX / DOT_STEP), days);
+        if (nextIndex !== previewIndexRef.current) {
+          clickCrossedDates(previewIndexRef.current, nextIndex);
+          previewIndexRef.current = nextIndex;
+          setPreviewIndexState(nextIndex);
+        }
+        paintDial(nextDragX);
         dragFrame.current = null;
       });
     }
@@ -133,12 +215,16 @@ export default function CycleHero({
   function finishDrag() {
     if (dragStart.current == null) return;
     const shift = Math.round(-dragXRef.current / DOT_STEP);
+    const nextIndex = clampIndex(activeIndex + shift, days);
+    if (nextIndex !== previewIndexRef.current) clickCrossedDates(previewIndexRef.current, nextIndex);
+    previewIndexRef.current = nextIndex;
     if (dragFrame.current != null) cancelAnimationFrame(dragFrame.current);
     dragFrame.current = null;
     dragStart.current = null;
     dragXRef.current = 0;
-    setDragX(0);
-    if (shift !== 0) select(activeIndex + shift);
+    setPreviewIndexState(nextIndex);
+    setIsDragging(false);
+    if (nextIndex !== activeIndex) select(nextIndex);
   }
 
   function cancelDrag() {
@@ -147,13 +233,18 @@ export default function CycleHero({
     dragStart.current = null;
     dragXRef.current = 0;
     dragged.current = false;
-    setDragX(0);
+    previewIndexRef.current = activeIndex;
+    paintDial(0);
+    setPreviewIndexState(activeIndex);
+    setIsDragging(false);
   }
 
   function onDialKeyDown(event: KeyboardEvent<SVGSVGElement>) {
     if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
       event.preventDefault();
-      select(activeIndex + (event.key === "ArrowRight" ? 1 : -1));
+      const nextIndex = clampIndex(activeIndex + (event.key === "ArrowRight" ? 1 : -1), days);
+      if (nextIndex !== activeIndex) scheduleDateClick();
+      select(nextIndex);
     }
   }
 
@@ -162,22 +253,31 @@ export default function CycleHero({
       dragged.current = false;
       return;
     }
+    if (index !== activeIndex) scheduleDateClick();
     select(index);
   }
 
   const customStyle = {
-    "--cycle-color": stage.color,
+    "--cycle-color": previewStage.color,
   } as CSSProperties;
 
-  return <section className={`cycle-hero lotus-stage-${stage.key}`} style={customStyle} aria-labelledby="cycle-title" data-lotus-stage={stage.key} data-lotus-petals={stage.petals}>
+  return <section
+    className={`cycle-hero lotus-stage-${previewStage.key}`}
+    style={customStyle}
+    aria-labelledby="cycle-title"
+    data-lotus-stage={previewStage.key}
+    data-lotus-petals={previewStage.petals}
+    data-selected-index={activeIndex}
+    data-preview-index={previewIndex}
+  >
     <div className="cosmic-dust" aria-hidden="true">{Array.from({ length: 42 }, (_, index) => <i key={index} />)}</div>
 
     <svg
-      className={`cycle-dial${dragX ? " is-dragging" : ""}`}
+      className={`cycle-dial${isDragging ? " is-dragging" : ""}`}
       viewBox="0 0 380 142"
       role="group"
       tabIndex={0}
-      aria-label={`Календарь цикла. Выбрано: ${relativeDayLabel(day.iso)}, ${day.cycleDay} день цикла. Двигайте влево или вправо.`}
+      aria-label={`Календарь цикла. В центре: ${relativeDayLabel(previewDay.iso)}, ${previewDay.cycleDay} день цикла. Двигайте влево или вправо.`}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={finishDrag}
@@ -191,20 +291,28 @@ export default function CycleHero({
         </filter>
       </defs>
       {visibleDays.map(({ item, index, offset }) => {
-        const visualOffset = offset + dragX / DOT_STEP;
-        if (Math.abs(visualOffset) > 6.45) return null;
+        const visualOffset = offset + (isDragging ? dragXRef.current / DOT_STEP : 0);
         const point = arcPoint(visualOffset);
         const dotStage = stageForPhase(item.phase);
         const isNear = Math.abs(visualOffset) <= 6.45;
         const month = item.dayOfMonth === 1 ? MONTH_SHORT.format(item.date).replace(".", "") : "";
         return <g
           key={item.iso}
-          className={`dial-date${index === activeIndex ? " is-selected" : ""}${item.isToday ? " is-today" : ""}`}
+          ref={(element) => {
+            if (element) dialDateRefs.current.set(index, element);
+            else dialDateRefs.current.delete(index);
+          }}
+          className={`dial-date${index === previewIndex ? " is-selected" : ""}${item.isToday ? " is-today" : ""}`}
           transform={`translate(${point.x} ${point.y})`}
-          style={{ "--dot-color": dotStage.color, opacity: Math.max(.18, 1 - Math.abs(visualOffset) / 11) } as CSSProperties}
+          style={{
+            "--dot-color": dotStage.color,
+            opacity: isNear ? Math.max(.18, 1 - Math.abs(visualOffset) / 11) : 0,
+            visibility: isNear ? "visible" : "hidden",
+            pointerEvents: isNear ? "auto" : "none",
+          } as CSSProperties}
           role="button"
           tabIndex={isNear ? 0 : -1}
-          aria-current={index === activeIndex ? "date" : undefined}
+          aria-current={index === previewIndex ? "date" : undefined}
           aria-label={`${item.dayOfMonth} ${MONTH_SHORT.format(item.date)}, ${item.cycleDay} день цикла`}
           onClick={() => selectDot(index)}
           onKeyDown={(event) => {
@@ -232,8 +340,8 @@ export default function CycleHero({
     <button className="cycle-jump next" type="button" onClick={() => select(activeIndex + profile.cycleLength)} aria-label="Следующий цикл">›</button>
 
     <div className="phase-badge" aria-live="polite">
-      <span>{relativeDayLabel(day.iso)}</span>
-      <strong>{day.dayOfMonth} {MONTH_SHORT.format(day.date).replace(".", "")} · {stage.label.toLowerCase()}</strong>
+      <span>{relativeDayLabel(previewDay.iso)}</span>
+      <strong>{previewDay.dayOfMonth} {MONTH_SHORT.format(previewDay.date).replace(".", "")} · {previewStage.label.toLowerCase()}</strong>
     </div>
 
     <button className="cycle-settings-button" type="button" onClick={onOpenPeriod} aria-label="Отметить месячные и настроить цикл">
@@ -244,19 +352,19 @@ export default function CycleHero({
       <svg className="cycle-lotus" viewBox="0 0 380 230" role="img" aria-labelledby="cycle-title cycle-description">
         <defs>
           <radialGradient id="lotus-fill">
-            <stop offset="0" stopColor={stage.color} stopOpacity=".38" />
-            <stop offset=".62" stopColor={stage.color} stopOpacity=".12" />
+            <stop offset="0" stopColor={previewStage.color} stopOpacity=".38" />
+            <stop offset=".62" stopColor={previewStage.color} stopOpacity=".12" />
             <stop offset="1" stopColor="#030107" stopOpacity="0" />
           </radialGradient>
           <linearGradient id="petal-fill" x1="0" y1="0" x2="0" y2="1">
-            <stop stopColor={stage.color} />
-            <stop offset=".42" stopColor={stage.color} />
+            <stop stopColor={previewStage.color} />
+            <stop offset=".42" stopColor={previewStage.color} />
             <stop offset=".82" stopColor="#120718" />
             <stop offset="1" stopColor="#050108" />
           </linearGradient>
           <radialGradient id="drop-fill" cx="50%" cy="35%" r="72%">
-            <stop stopColor={stage.color} />
-            <stop offset=".48" stopColor={stage.color} />
+            <stop stopColor={previewStage.color} />
+            <stop offset=".48" stopColor={previewStage.color} />
             <stop offset=".82" stopColor="#100817" />
             <stop offset="1" stopColor="#050108" />
           </radialGradient>
@@ -266,31 +374,31 @@ export default function CycleHero({
           </filter>
         </defs>
         <ellipse className="lotus-aura" cx="190" cy="135" rx="150" ry="108" />
-        <g className={`lotus-bloom bloom-${stage.petals}`} filter="url(#lotus-glow)" aria-hidden="true">
-          <path className={`lotus-petal outer left${stage.petals >= 7 ? " is-visible" : ""}`} d={LOTUS_PETAL_PATH} />
-          <path className={`lotus-petal outer right${stage.petals >= 7 ? " is-visible" : ""}`} d={LOTUS_PETAL_PATH} />
-          <path className={`lotus-petal middle left${stage.petals >= 5 ? " is-visible" : ""}`} d={LOTUS_PETAL_PATH} />
-          <path className={`lotus-petal middle right${stage.petals >= 5 ? " is-visible" : ""}`} d={LOTUS_PETAL_PATH} />
-          <path className={`lotus-petal inner left${stage.petals >= 3 ? " is-visible" : ""}`} d={LOTUS_PETAL_PATH} />
-          <path className={`lotus-petal inner right${stage.petals >= 3 ? " is-visible" : ""}`} d={LOTUS_PETAL_PATH} />
-          <path className="lotus-petal lotus-drop center is-visible" d={LOTUS_PETAL_PATH} />
+        <g className={`lotus-bloom bloom-${previewStage.petals}`} filter="url(#lotus-glow)" aria-hidden="true">
+          <path className="lotus-petal outer left" d={LOTUS_PETAL_PATH} />
+          <path className="lotus-petal outer right" d={LOTUS_PETAL_PATH} />
+          <path className="lotus-petal middle left" d={LOTUS_PETAL_PATH} />
+          <path className="lotus-petal middle right" d={LOTUS_PETAL_PATH} />
+          <path className="lotus-petal inner left" d={LOTUS_PETAL_PATH} />
+          <path className="lotus-petal inner right" d={LOTUS_PETAL_PATH} />
+          <path className="lotus-petal lotus-drop center" d={LOTUS_PETAL_PATH} />
           <path className="lotus-drop-shine" d="M171 76 C159 101 155 127 160 151" />
         </g>
-        <text className="lotus-day" x="190" y="130" textAnchor="middle">{day.cycleDay}</text>
+        <text className="lotus-day" x="190" y="130" textAnchor="middle">{previewDay.cycleDay}</text>
         <text className="lotus-day-label" x="190" y="149" textAnchor="middle">день цикла</text>
       </svg>
       <span className="lotus-tap-hint"><i />нажмите, чтобы отметить месячные</span>
     </button>
 
     <div className="cycle-copy">
-      <p className="cycle-stage-count">{stage.petals} из 7 лепестков</p>
-      <h1 id="cycle-title">{day.isToday ? `Сегодня — ${stage.label.toLowerCase()}` : `${relativeDayLabel(day.iso)} · ${stage.label.toLowerCase()}`}</h1>
-      <p id="cycle-description">{stage.description}. {phaseHint(day.phase)} — ориентировочный календарный расчёт.</p>
-      {!day.isToday && todayIndex >= 0 ? <button className="return-today" type="button" onClick={() => select(todayIndex)}>вернуться к сегодня</button> : null}
+      <p className="cycle-stage-count">{previewStage.petals} из 7 лепестков</p>
+      <h1 id="cycle-title">{previewDay.isToday ? `Сегодня — ${previewStage.label.toLowerCase()}` : `${relativeDayLabel(previewDay.iso)} · ${previewStage.label.toLowerCase()}`}</h1>
+      <p id="cycle-description">{previewStage.description}. {phaseHint(previewDay.phase)} — ориентировочный календарный расчёт.</p>
+      {!previewDay.isToday && todayIndex >= 0 ? <button className="return-today" type="button" onClick={() => select(todayIndex)}>вернуться к сегодня</button> : null}
     </div>
 
     <div className="cycle-stage-legend" aria-label="Раскрытие лотоса по фазам цикла">
-      {Object.values(STAGES).map((item) => <span key={item.key} className={item.key === stage.key ? "is-active" : ""} title={item.label}><i style={{ background: item.color }} /><b>{item.petals}</b></span>)}
+      {Object.values(STAGES).map((item) => <span key={item.key} className={item.key === previewStage.key ? "is-active" : ""} title={item.label}><i style={{ background: item.color }} /><b>{item.petals}</b></span>)}
     </div>
   </section>;
 }
