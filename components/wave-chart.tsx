@@ -7,6 +7,17 @@ import { CONTEXT_META, ZONE_META, relativeDayLabel } from "../lib/alma";
 
 const SPACING = 64;
 const CENTER_X = 380;
+const CONTEXT_AMPLITUDE = 125;
+
+type PhysicalRange = { min: number; neutral: number; max: number };
+
+const PHYSICAL_RANGES: Partial<Record<ContextKey, PhysicalRange>> = {
+  temperature: { min: -40, neutral: 0, max: 40 },
+  pressure: { min: 950, neutral: 1013, max: 1075 },
+  humidity: { min: 0, neutral: 50, max: 100 },
+  daylight: { min: 0, neutral: 720, max: 1440 },
+  geomagnetic: { min: 0, neutral: 4.5, max: 9 },
+};
 
 function pointsFor(values: number[], activeIndex: number) {
   return values.map((value, index) => ({ x: CENTER_X + (index - activeIndex) * SPACING, y: 130 - value * 0.72 }));
@@ -25,35 +36,37 @@ function smoothCurve(points: Array<{ x: number; y: number }>) {
   return result;
 }
 
-function normalize(values: Array<number | null>, scale = 38) {
-  const real = values.filter((value): value is number => typeof value === "number");
-  if (!real.length) return [];
-  const min = Math.min(...real);
-  const max = Math.max(...real);
-  const middle = (min + max) / 2;
-  const spread = Math.max(1, max - min);
-  return values.map((value) => value == null ? 0 : ((value - middle) / spread) * scale * 2);
+function physicalValue(value: number | null, range: PhysicalRange) {
+  if (value == null) return 0;
+  const clamped = Math.max(range.min, Math.min(range.max, value));
+  if (clamped === range.neutral) return 0;
+  if (clamped < range.neutral) return -((range.neutral - clamped) / Math.max(1, range.neutral - range.min)) * CONTEXT_AMPLITUDE;
+  return ((clamped - range.neutral) / Math.max(1, range.max - range.neutral)) * CONTEXT_AMPLITUDE;
 }
 
 function contextValues(key: ContextKey, days: DayModel[], environment: EnvironmentPayload | null) {
   if (key === "cycle") {
-    return days.map((day) => Math.sin(((day.cycleDay - 1) / Math.max(1, 28)) * Math.PI * 2 - 1.2) * 31);
+    return days.map((day) => Math.sin(((day.cycleDay - 1) / Math.max(1, 28)) * Math.PI * 2 - 1.2) * 82);
   }
   if (!environment) return [];
   if (key === "geomagnetic") {
     const kp = environment.geomagnetic?.kp;
-    return days.map((day) => day.isToday && kp != null ? (kp - 4.5) * 9 : 0);
+    const range = PHYSICAL_RANGES.geomagnetic!;
+    return days.map((day) => day.isToday && kp != null ? physicalValue(kp, range) : 0);
   }
+  const range = PHYSICAL_RANGES[key];
+  if (!range) return [];
   const byDate = new Map(environment.days.map((day) => [day.date, day]));
-  const raw = days.map((day) => {
+  return days.map((day) => {
     const item = byDate.get(day.iso);
-    if (!item) return null;
-    if (key === "temperature") return item.temperatureC;
-    if (key === "pressure") return item.pressureHpa;
-    if (key === "humidity") return item.humidityPct;
-    return item.daylightMinutes;
+    if (!item) return 0;
+    let raw: number | null = null;
+    if (key === "temperature") raw = item.temperatureC;
+    else if (key === "pressure") raw = item.pressureHpa;
+    else if (key === "humidity") raw = item.humidityPct;
+    else if (key === "daylight") raw = item.daylightMinutes;
+    return physicalValue(raw, range);
   });
-  return normalize(raw, key === "daylight" ? 28 : 38);
 }
 
 function CycleRailMarker({ day, x }: { day: DayModel; x: number }) {
