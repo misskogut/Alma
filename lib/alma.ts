@@ -55,6 +55,10 @@ export type AlmaProfile = {
   actionCatalog?: string[];
   /** Up to five actions kept on the main cycle screen for one-tap logging. */
   quickAccessActions?: string[];
+  /** Cycle and intimate-health actions stay with the cycle, not with activity. */
+  cycleActions?: string[];
+  cycleActionCatalog?: string[];
+  cycleQuickAccessActions?: string[];
 };
 
 export type SymptomStatus = "suggested" | "confirmed" | "dismissed";
@@ -268,7 +272,8 @@ export function defaultProfile(currentIso = todayIso()): AlmaProfile {
     latitude: 51.4855,
     longitude: 46.1268,
     automaticHighlights: true,
-    quickActions: ["Контрацептив", "Медитация", "Йога", "Дыхательная практика"],
+    quickActions: ["Йога", "Тренировка", "Прогулка", "Путешествие"],
+    cycleActions: ["Контрацептив", "Секс", "Мастурбация", "Тест на овуляцию"],
   };
 }
 

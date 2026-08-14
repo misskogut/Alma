@@ -87,26 +87,26 @@ export function DaySheet({ day, environment, symptoms, activeContexts, internalW
 
 const WEEKDAYS = ["пн", "вт", "ср", "чт", "пт", "сб", "вс"];
 const MONTH_LONG = new Intl.DateTimeFormat("ru-RU", { month: "long", year: "numeric", timeZone: "UTC" });
-type QuickAction = { label: string; icon: string; group: "Бережный ритм" | "Тело и контекст" };
+type QuickAction = { label: string; icon: string; group: "Контрацепция и уход" | "Интимная жизнь" };
 const DEFAULT_QUICK_ACTIONS: QuickAction[] = [
-  { label: "Контрацептив", icon: "◌", group: "Тело и контекст" },
-  { label: "Медитация", icon: "✦", group: "Бережный ритм" },
-  { label: "Йога", icon: "⌁", group: "Бережный ритм" },
-  { label: "Дыхательная практика", icon: "◒", group: "Бережный ритм" },
+  { label: "Контрацептив", icon: "◌", group: "Контрацепция и уход" },
+  { label: "Тест на овуляцию", icon: "◉", group: "Контрацепция и уход" },
+  { label: "Секс", icon: "♡", group: "Интимная жизнь" },
+  { label: "Мастурбация", icon: "◒", group: "Интимная жизнь" },
 ];
 const EXTRA_QUICK_ACTIONS: QuickAction[] = [
-  { label: "Прогулка", icon: "↗", group: "Бережный ритм" },
-  { label: "Дневник", icon: "▤", group: "Бережный ритм" },
-  { label: "Тренировка", icon: "◈", group: "Тело и контекст" },
-  { label: "Массаж", icon: "〰", group: "Тело и контекст" },
-  { label: "Алкоголь", icon: "◐", group: "Тело и контекст" },
-  { label: "Путешествие", icon: "⌖", group: "Тело и контекст" },
-  { label: "Болезнь или травма", icon: "＋", group: "Тело и контекст" },
+  { label: "Приняла витамин", icon: "✦", group: "Контрацепция и уход" },
+  { label: "Приём у врача", icon: "⌖", group: "Контрацепция и уход" },
+  { label: "Контрацепция экстренная", icon: "◈", group: "Контрацепция и уход" },
+  { label: "Секс с защитой", icon: "◐", group: "Интимная жизнь" },
+  { label: "Секс без защиты", icon: "○", group: "Интимная жизнь" },
+  { label: "Оргазм", icon: "✧", group: "Интимная жизнь" },
+  { label: "Интимные прикосновения", icon: "♡", group: "Интимная жизнь" },
 ];
 const ALL_QUICK_ACTIONS = [...DEFAULT_QUICK_ACTIONS, ...EXTRA_QUICK_ACTIONS];
 
 function quickActionFor(label: string): QuickAction {
-  return ALL_QUICK_ACTIONS.find((action) => action.label === label) ?? { label, icon: "＋", group: "Тело и контекст" };
+  return ALL_QUICK_ACTIONS.find((action) => action.label === label) ?? { label, icon: "＋", group: "Контрацепция и уход" };
 }
 
 function firstOfMonth(iso: string) {
@@ -162,14 +162,14 @@ export function CycleSettingsSheet({
   const lastHoverTarget = useRef<string | null>(null);
   const days = useMemo(() => calendarDays(visibleMonth), [visibleMonth]);
   const currentMonth = firstOfMonth(currentIso);
-  const quickActionLabels = profile.quickActions ?? DEFAULT_QUICK_ACTIONS.map((action) => action.label);
+  const quickActionLabels = profile.cycleActions ?? DEFAULT_QUICK_ACTIONS.map((action) => action.label);
   const quickActions = quickActionLabels.map(quickActionFor);
-  const allActionLabels = Array.from(new Set([...ALL_QUICK_ACTIONS.map((action) => action.label), ...(profile.actionCatalog ?? [])]));
+  const allActionLabels = Array.from(new Set([...ALL_QUICK_ACTIONS.map((action) => action.label), ...(profile.cycleActionCatalog ?? [])]));
   const catalogActions = allActionLabels.filter((label) => !quickActionLabels.includes(label)).map(quickActionFor);
   // Configuration and the day's markers are separate: only an action that is
   // still in the working set can be presented as selected in this compact UI.
   const selectedWorkingActionLabels = selectedActionLabels.filter((label) => quickActionLabels.includes(label));
-  const quickAccessLabels = (profile.quickAccessActions ?? []).filter((label) => quickActionLabels.includes(label));
+  const quickAccessLabels = (profile.cycleQuickAccessActions ?? []).filter((label) => quickActionLabels.includes(label));
 
   function toggleQuickAccess(label: string) {
     if (quickAccessLabels.includes(label)) {
@@ -183,8 +183,8 @@ export function CycleSettingsSheet({
     const normalized = label.trim().replace(/\s+/g, " ");
     if (!normalized || quickActionLabels.includes(normalized)) return;
     const nextCatalog = ALL_QUICK_ACTIONS.some((action) => action.label === normalized) || profile.actionCatalog?.includes(normalized)
-      ? profile.actionCatalog
-      : [...(profile.actionCatalog ?? []), normalized];
+      ? profile.cycleActionCatalog
+      : [...(profile.cycleActionCatalog ?? []), normalized];
     onUpdateQuickActions([...quickActionLabels, normalized], nextCatalog);
     setCustomAction("");
   }
@@ -265,11 +265,11 @@ export function CycleSettingsSheet({
   return <SheetLayer onClose={onClose} className={`period-layer${periodFormOpen ? " is-expanded" : " is-compact"}`}>
     <section className="bottom-sheet period-sheet" role="dialog" aria-modal="true" aria-labelledby="cycle-settings-title">
       <div className="sheet-handle" />
-      <header className="sheet-header"><div><p className="eyebrow">отметки дня</p><h2 id="cycle-settings-title">Цикл и действия</h2></div><button type="button" aria-label="Закрыть" onClick={onClose}>×</button></header>
-      <p className="settings-intro">Отметь только то, что действительно было сегодня. Длина цикла постепенно уточняется по отмеченным началам.</p>
+      <header className="sheet-header"><div><p className="eyebrow">мой цикл</p><h2 id="cycle-settings-title">Цикл и женское здоровье</h2></div><button type="button" aria-label="Закрыть" onClick={onClose}>×</button></header>
+      <p className="settings-intro">Здесь — отметки, связанные с циклом, контрацепцией и интимной жизнью. Повседневная активность находится в отдельном блоке.</p>
 
       <section className="quick-actions-block" aria-label="Быстрые отметки">
-        <div className="quick-actions-heading"><div><p className="eyebrow">быстрая отметка</p><strong>Что было сегодня?</strong><small>{actionsOpen ? "Удержи и перетяни действие между наборами." : "Нажми, чтобы отметить действие сегодня."}</small></div><span>{selectedWorkingActionLabels.length ? `${selectedWorkingActionLabels.length} выбрано` : "по желанию"}</span></div>
+        <div className="quick-actions-heading"><div><p className="eyebrow">быстрая отметка</p><strong>Что относится к циклу?</strong><small>{actionsOpen ? "Удержи и перетяни действие между наборами." : "Нажми, чтобы отметить событие сегодня."}</small></div><span>{selectedWorkingActionLabels.length ? `${selectedWorkingActionLabels.length} выбрано` : "по желанию"}</span></div>
         <div className={`quick-actions-grid quick-actions-active${actionsOpen ? " is-editing" : ""}`} data-quick-zone="active">
           {quickActions.map((action) => <div className={`quick-action-card${draggedAction === action.label ? " is-dragging" : ""}`} data-quick-action={action.label} key={action.label}>
             <button className="quick-action-main" type="button" aria-pressed={selectedWorkingActionLabels.includes(action.label)} onClick={() => { if (actionsOpen || suppressNextTap.current) { suppressNextTap.current = false; return; } onToggleQuickAction(action); }} onPointerDown={(event) => beginDrag(event, action.label)} onPointerMove={continueDrag} onPointerUp={finishDrag} onPointerCancel={() => { dragStart.current = null; setDraggedAction(null); }}><i>{action.icon}</i><span>{action.label}</span></button>
@@ -279,8 +279,8 @@ export function CycleSettingsSheet({
         </div>
         {draggedAction && dragPoint && <div className="quick-action-ghost" style={{ left: dragPoint.x, top: dragPoint.y }} aria-hidden="true"><i>{quickActionFor(draggedAction).icon}</i><span>{draggedAction}</span></div>}
         <button type="button" className={`quick-actions-more${actionsOpen ? " is-open" : ""}`} onClick={() => setActionsOpen((value) => !value)}>{actionsOpen ? "Скрыть каталог" : "＋ добавить"}</button>
-        {actionsOpen && <div className="quick-access-editor"><div><p className="eyebrow">на главном экране</p><strong>Быстрый доступ · до 5</strong></div><p>Выбери действия, которые хочешь отмечать прямо под цветком.</p><div>{quickActions.map((action) => <button key={action.label} className={quickAccessLabels.includes(action.label) ? "is-selected" : ""} type="button" aria-pressed={quickAccessLabels.includes(action.label)} onClick={() => toggleQuickAccess(action.label)}><i>{quickAccessLabels.includes(action.label) ? "✓" : "＋"}</i><span>{action.label}</span></button>)}</div></div>}
-        {actionsOpen && <div className="quick-actions-extra quick-actions-catalog" data-quick-zone="catalog"><p className="quick-actions-catalog-intro">Нажми ＋, чтобы вернуть действие наверх. Удерживай рабочую кнопку и перетаскивай её для нового порядка.</p>{(["Бережный ритм", "Тело и контекст"] as const).map((group) => <section key={group}><p>{group}</p><div>{catalogActions.filter((action) => action.group === group).map((action) => <button key={action.label} type="button" onClick={() => addQuickAction(action.label)}><i>{action.icon}</i><span>{action.label}</span><b>＋</b></button>)}</div></section>)}<form className="quick-action-custom" onSubmit={(event) => { event.preventDefault(); addQuickAction(customAction); }}><input value={customAction} onChange={(event) => setCustomAction(event.target.value)} placeholder="Своё действие" maxLength={48} /><button type="submit" disabled={!customAction.trim()}>добавить</button></form></div>}
+        {actionsOpen && <div className="quick-access-editor"><div><p className="eyebrow">на главном экране</p><strong>Быстрый доступ · до 5</strong></div><p>Выбери циклические отметки, которые хочешь держать под цветком.</p><div>{quickActions.map((action) => <button key={action.label} className={quickAccessLabels.includes(action.label) ? "is-selected" : ""} type="button" aria-pressed={quickAccessLabels.includes(action.label)} onClick={() => toggleQuickAccess(action.label)}><i>{quickAccessLabels.includes(action.label) ? "✓" : "＋"}</i><span>{action.label}</span></button>)}</div></div>}
+        {actionsOpen && <div className="quick-actions-extra quick-actions-catalog" data-quick-zone="catalog"><p className="quick-actions-catalog-intro">Нажми ＋, чтобы вернуть отметку наверх. Удерживай рабочую кнопку и перетаскивай её для нового порядка.</p>{(["Контрацепция и уход", "Интимная жизнь"] as const).map((group) => <section key={group}><p>{group}</p><div>{catalogActions.filter((action) => action.group === group).map((action) => <button key={action.label} type="button" onClick={() => addQuickAction(action.label)}><i>{action.icon}</i><span>{action.label}</span><b>＋</b></button>)}</div></section>)}<form className="quick-action-custom" onSubmit={(event) => { event.preventDefault(); addQuickAction(customAction); }}><input value={customAction} onChange={(event) => setCustomAction(event.target.value)} placeholder="Своя отметка" maxLength={48} /><button type="submit" disabled={!customAction.trim()}>добавить</button></form></div>}
       </section>
 
       <button className={`period-expand-trigger${periodFormOpen ? " is-open" : ""}`} type="button" aria-expanded={periodFormOpen} onClick={() => setPeriodFormOpen((value) => !value)}><span><i>●</i><b>{periodFormOpen ? "Отметка месячных" : "Отметить месячные"}</b><small>{periodFormOpen ? "выбери первый день и длительность" : "откроется календарь и выбор дней"}</small></span><em>{periodFormOpen ? "−" : "＋"}</em></button>

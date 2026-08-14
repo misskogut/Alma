@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import BodyCheckin from "../components/body-checkin";
+import ActivityPanel from "../components/activity-panel";
 import CycleHero from "../components/cycle-hero";
 import EnvironmentPanel, { ContextStrip } from "../components/environment-panel";
 import { ConnectionsSheet, CycleSettingsSheet, DaySheet } from "../components/sheets";
@@ -266,17 +267,21 @@ export default function AlmaPrototype() {
     if (userId) saveCloudProfile(userId, next).catch(() => setSyncMode("local"));
   }
 
-  function updateQuickActions(quickActions: string[], actionCatalog = profile.actionCatalog) {
-    const quickAccessActions = (profile.quickAccessActions ?? []).filter((label) => quickActions.includes(label));
-    const next = { ...profile, quickActions, actionCatalog, quickAccessActions };
+  function updateCycleActions(cycleActions: string[], cycleActionCatalog = profile.cycleActionCatalog) {
+    const cycleQuickAccessActions = (profile.cycleQuickAccessActions ?? []).filter((label) => cycleActions.includes(label));
+    const next = { ...profile, cycleActions, cycleActionCatalog, cycleQuickAccessActions };
     setProfile(next);
     // The working set is also retained in the local ALMA snapshot. The current
     // cloud profile schema only stores cycle settings, so this remains safely
     // device-local until a dedicated preference field is introduced.
   }
 
-  function updateQuickAccessActions(quickAccessActions: string[]) {
-    setProfile({ ...profile, quickAccessActions: quickAccessActions.slice(0, 5) });
+  function updateActivityActions(quickActions: string[], actionCatalog: string[]) {
+    setProfile({ ...profile, quickActions, actionCatalog });
+  }
+
+  function updateCycleQuickAccess(cycleQuickAccessActions: string[]) {
+    setProfile({ ...profile, cycleQuickAccessActions: cycleQuickAccessActions.slice(0, 5) });
   }
 
   function applyVoiceDraft(draft: VoiceDraft) {
@@ -313,9 +318,11 @@ export default function AlmaPrototype() {
         </button>
       </header>
 
-      <CycleHero profile={profile} days={days} activeIndex={activeIndex} workingQuickActionLabels={profile.quickActions ?? ["Контрацептив", "Медитация", "Йога", "Дыхательная практика"]} quickAccessLabels={profile.quickAccessActions ?? []} selectedQuickActionLabels={activeSymptoms.filter((item) => item.zone === "general" && item.status === "confirmed").map((item) => item.label)} onToggleQuickAccess={(label) => toggleQuickAction({ label })} onUpdateQuickAccess={updateQuickAccessActions} onOpenVoice={() => setVoiceCheckinOpen(true)} onSelectDay={selectDay} onOpenPeriod={() => setCycleSettingsOpen(true)} />
+      <CycleHero profile={profile} days={days} activeIndex={activeIndex} quickAccessLabels={profile.cycleQuickAccessActions ?? []} selectedQuickActionLabels={activeSymptoms.filter((item) => item.zone === "general" && item.status === "confirmed").map((item) => item.label)} onToggleQuickAccess={(label) => toggleQuickAction({ label })} onSelectDay={selectDay} onOpenPeriod={() => setCycleSettingsOpen(true)} />
 
       {!activeDay.isForecast ? <BodyCheckin values={activeDay.zones} symptoms={activeSymptoms} symptomHistory={symptomHistory} activeZone={activeZone} onSelect={setActiveZone} onBeginAdjustment={beginZoneAdjustment} onChange={changeZone} onCommit={commitState} onAddQuickSymptom={addSymptom} onUpdateQuickSymptom={updateSymptom} /> : <section className="forecast-card glass-card"><span>∿</span><div><p className="eyebrow">без ввода в будущее</p><h2>Это вероятный фон</h2><p>Состояние можно уточнить только для наступившего дня. Прогноз остаётся бледным и не смешивается с фактом.</p></div></section>}
+
+      {!activeDay.isForecast && <ActivityPanel actions={(profile.quickActions ?? []).filter((label) => !["Контрацептив", "Секс", "Мастурбация", "Тест на овуляцию"].includes(label))} catalog={profile.actionCatalog} selected={activeSymptoms.filter((item) => item.zone === "general" && item.status === "confirmed").map((item) => item.label)} onToggle={(label) => toggleQuickAction({ label })} onUpdate={updateActivityActions} />}
 
       <section className="wave-section" aria-labelledby="wave-title">
         <header className="wave-section-header">
@@ -344,9 +351,10 @@ export default function AlmaPrototype() {
       <footer className="app-footer"><p>Observation, not prescription</p><span>ALMA показывает совпадения и вероятный фон, не диагноз и не лечение.</span><i /></footer>
     </div>
 
-    {cycleSettingsOpen && <CycleSettingsSheet profile={profile} activeIso={activeDay.iso} selectedActionLabels={activeSymptoms.filter((item) => item.zone === "general" && item.status === "confirmed").map((item) => item.label)} onSave={saveProfile} onToggleQuickAction={toggleQuickAction} onUpdateQuickActions={updateQuickActions} onUpdateQuickAccess={updateQuickAccessActions} onClose={() => setCycleSettingsOpen(false)} />}
+    <button className="floating-voice-trigger" type="button" onClick={() => setVoiceCheckinOpen(true)} aria-label="Рассказать о дне голосом"><svg viewBox="0 0 48 48" aria-hidden="true"><defs><linearGradient id="fixed-voice-rainbow" x1="8" y1="8" x2="40" y2="40"><stop stopColor="#6ce8ff"/><stop offset=".34" stopColor="#a979ff"/><stop offset=".68" stopColor="#ff83c9"/><stop offset="1" stopColor="#ffd176"/></linearGradient></defs><rect x="17" y="7" width="14" height="23" rx="7"/><path d="M12 24a12 12 0 0 0 24 0M24 36v6M17 42h14"/></svg><span>рассказать</span></button>
+    {cycleSettingsOpen && <CycleSettingsSheet profile={profile} activeIso={activeDay.iso} selectedActionLabels={activeSymptoms.filter((item) => item.zone === "general" && item.status === "confirmed").map((item) => item.label)} onSave={saveProfile} onToggleQuickAction={toggleQuickAction} onUpdateQuickActions={updateCycleActions} onUpdateQuickAccess={updateCycleQuickAccess} onClose={() => setCycleSettingsOpen(false)} />}
     {daySheetOpen && <DaySheet day={activeDay} environment={environment} symptoms={activeSymptoms} activeContexts={activeContexts} internalWaves={internalWaves} activeLayers={activeLayers} deviceSignals={null} onClose={() => setDaySheetOpen(false)} />}
     {connectionsOpen && <ConnectionsSheet day={activeDay} days={days} environment={environment} onClose={() => setConnectionsOpen(false)} />}
-    {voiceCheckinOpen && <VoiceCheckinSheet actionLabels={profile.quickActions ?? ["Контрацептив", "Медитация", "Йога", "Дыхательная практика"]} onConfirm={applyVoiceDraft} onClose={() => setVoiceCheckinOpen(false)} />}
+    {voiceCheckinOpen && <VoiceCheckinSheet actionLabels={Array.from(new Set([...(profile.cycleActions ?? ["Контрацептив", "Секс", "Мастурбация", "Тест на овуляцию"]), ...(profile.quickActions ?? ["Йога", "Тренировка", "Прогулка", "Путешествие"])]))} onConfirm={applyVoiceDraft} onClose={() => setVoiceCheckinOpen(false)} />}
   </main>;
 }

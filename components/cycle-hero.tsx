@@ -93,29 +93,22 @@ export default function CycleHero({
   profile,
   days,
   activeIndex,
-  workingQuickActionLabels,
   quickAccessLabels,
   selectedQuickActionLabels,
   onToggleQuickAccess,
-  onUpdateQuickAccess,
-  onOpenVoice,
   onSelectDay,
   onOpenPeriod,
 }: {
   profile: AlmaProfile;
   days: DayModel[];
   activeIndex: number;
-  workingQuickActionLabels: string[];
   quickAccessLabels: string[];
   selectedQuickActionLabels: string[];
   onToggleQuickAccess: (label: string) => void;
-  onUpdateQuickAccess: (labels: string[]) => void;
-  onOpenVoice: () => void;
   onSelectDay: (index: number) => void;
   onOpenPeriod: () => void;
 }) {
   const [isDialInMotion, setIsDialInMotion] = useState(false);
-  const [quickAccessPickerOpen, setQuickAccessPickerOpen] = useState(false);
   const [previewIndexState, setPreviewIndexState] = useState(activeIndex);
   const positionRef = useRef(activeIndex);
   const velocityRef = useRef(0);
@@ -363,13 +356,6 @@ export default function CycleHero({
     "--cycle-color": previewStage.color,
   } as CSSProperties;
 
-  function toggleQuickAccessSlot(label: string) {
-    if (quickAccessLabels.includes(label)) {
-      onUpdateQuickAccess(quickAccessLabels.filter((item) => item !== label));
-      return;
-    }
-    if (quickAccessLabels.length < 5) onUpdateQuickAccess([...quickAccessLabels, label]);
-  }
 
   return <section
     className={`cycle-hero lotus-stage-${previewStage.key}${isDialInMotion ? " is-cycle-scrubbing" : ""}`}
@@ -539,11 +525,10 @@ export default function CycleHero({
       {!previewDay.isToday && todayIndex >= 0 ? <button className="return-today" type="button" onClick={() => select(todayIndex)}>вернуться к сегодня</button> : null}
     </div>
 
-    <button className="voice-trigger" type="button" onClick={onOpenVoice}><i><svg viewBox="0 0 48 48" aria-hidden="true"><defs><linearGradient id="voice-rainbow" x1="8" y1="8" x2="40" y2="40"><stop stopColor="#6ce8ff"/><stop offset=".34" stopColor="#a979ff"/><stop offset=".68" stopColor="#ff83c9"/><stop offset="1" stopColor="#ffd176"/></linearGradient></defs><rect x="17" y="7" width="14" height="23" rx="7"/><path d="M12 24a12 12 0 0 0 24 0M24 36v6M17 42h14"/></svg></i><span>рассказать о дне</span></button>
-    <div className="cycle-quick-access" aria-label="Быстрые действия">
+    {quickAccessLabels.length > 0 && <div className="cycle-quick-access cycle-health-access" aria-label="Быстрые отметки цикла">
+      <p>быстро отметить</p>
       {quickAccessLabels.map((label) => <button key={label} className={selectedQuickActionLabels.includes(label) ? "is-selected" : ""} type="button" aria-pressed={selectedQuickActionLabels.includes(label)} onClick={() => onToggleQuickAccess(label)}><i>✦</i><span>{label}</span></button>)}
-      <button className={`cycle-quick-access-add${quickAccessPickerOpen ? " is-open" : ""}`} type="button" onClick={() => setQuickAccessPickerOpen((value) => !value)} aria-expanded={quickAccessPickerOpen} aria-label="Настроить быстрые действия">＋</button>
-      {quickAccessPickerOpen && <div className="cycle-quick-picker" role="dialog" aria-label="Выбор быстрых действий"><div><p>быстрый доступ</p><button type="button" aria-label="Закрыть" onClick={() => setQuickAccessPickerOpen(false)}>×</button></div><span>Выбери до 5 действий из рабочего набора</span><section>{workingQuickActionLabels.map((label) => <button key={label} className={quickAccessLabels.includes(label) ? "is-selected" : ""} type="button" aria-pressed={quickAccessLabels.includes(label)} disabled={!quickAccessLabels.includes(label) && quickAccessLabels.length >= 5} onClick={() => toggleQuickAccessSlot(label)}><i>{quickAccessLabels.includes(label) ? "✓" : "＋"}</i>{label}</button>)}</section></div>}
-    </div>
+    </div>}
+
   </section>;
 }
