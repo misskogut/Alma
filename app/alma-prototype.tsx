@@ -231,6 +231,15 @@ export default function AlmaPrototype() {
     if (userId) saveCloudSymptom(userId, activeDay.iso, symptom).catch(() => setSyncMode("local"));
   }
 
+  function toggleQuickAction(action: { label: string }) {
+    const existing = activeSymptoms.find((item) => item.zone === "general" && item.label === action.label);
+    if (existing) {
+      updateSymptom({ ...existing, status: existing.status === "confirmed" ? "dismissed" : "confirmed" });
+      return;
+    }
+    addSymptom({ id: `action-${activeDay.iso}-${action.label.toLowerCase().replace(/[^a-zа-яё0-9]+/giu, "-")}`, label: action.label, zone: "general", status: "confirmed", intensity: 0, suggestedBy: "user" });
+  }
+
   // A new drag is a replacement of this zone's last check-in, not another
   // observation layered over it. Historical entries are retained as dismissed
   // in storage, so they cannot reappear after a refresh.
@@ -302,7 +311,7 @@ export default function AlmaPrototype() {
       <footer className="app-footer"><p>Observation, not prescription</p><span>ALMA показывает совпадения и вероятный фон, не диагноз и не лечение.</span><i /></footer>
     </div>
 
-    {cycleSettingsOpen && <CycleSettingsSheet profile={profile} activeIso={activeDay.iso} onSave={saveProfile} onClose={() => setCycleSettingsOpen(false)} />}
+    {cycleSettingsOpen && <CycleSettingsSheet profile={profile} activeIso={activeDay.iso} selectedActionLabels={activeSymptoms.filter((item) => item.zone === "general" && item.status === "confirmed").map((item) => item.label)} onSave={saveProfile} onToggleQuickAction={toggleQuickAction} onClose={() => setCycleSettingsOpen(false)} />}
     {daySheetOpen && <DaySheet day={activeDay} environment={environment} symptoms={activeSymptoms} activeContexts={activeContexts} internalWaves={internalWaves} activeLayers={activeLayers} deviceSignals={null} onClose={() => setDaySheetOpen(false)} />}
     {connectionsOpen && <ConnectionsSheet day={activeDay} days={days} environment={environment} onClose={() => setConnectionsOpen(false)} />}
   </main>;
