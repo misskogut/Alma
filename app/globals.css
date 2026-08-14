@@ -564,3 +564,35 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 1px solid 
 .voice-symptom-search button { min-height: 29px; display: inline-flex; align-items: center; gap: 5px; border: 1px solid rgba(203, 143, 244, .25); border-radius: 999px; padding: 5px 9px; background: rgba(171, 87, 220, .09); color: #d7c8dd; font: inherit; font-size: 8px; cursor: pointer; }
 .voice-symptom-search button i { color: #d995ff; font-size: 11px; font-style: normal; }
 .voice-symptom-search .voice-add-new { border-style: dashed; color: #e3c0f4; }
+
+/* Shared framing for the three primary areas: one visual system, different content. */
+.cycle-hero, .activity-panel, .gesture-body-card {
+  margin-right: 14px;
+  margin-left: 14px;
+  border-radius: 24px;
+}
+.cycle-hero { margin-top: 12px; margin-bottom: 0; }
+.activity-panel { margin-top: 12px; margin-bottom: 0; padding: 17px 15px; }
+.gesture-body-card { margin-top: 12px; }
+
+.cycle-section-header, .activity-heading, .state-section-header {
+  min-height: 57px;
+}
+.cycle-section-header .eyebrow, .activity-heading .eyebrow, .state-section-header .eyebrow {
+  margin: 0 0 3px;
+  font-size: 7px;
+  letter-spacing: .15em;
+  text-transform: uppercase;
+}
+.cycle-section-header h2, .activity-heading h2, .state-section-header h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 520;
+  letter-spacing: -.025em;
+}
+.activity-heading { align-items: flex-start; }
+.activity-heading > .activity-info-button { width: 27px; min-height: 27px; height: 27px; border-radius: 50%; padding: 0; background: rgba(11, 20, 19, .7); }
+.activity-intro { max-width: 270px; margin: 3px 0 13px; color: #817789; font-size: 8px; line-height: 1.42; }
+.activity-workspace-heading { display: flex; align-items: center; justify-content: space-between; gap: 9px; }
+.activity-workspace-heading .activity-question { margin: 0; }
+.activity-configure-button { min-height: 29px; flex: 0 0 auto; border: 1px solid rgba(104,224,199,.35); border-radius: 999px; padding: 5px 8px; background: rgba(68,197,169,.1); color: #8ee8d5; font: inherit; font-size: 8px; cursor: pointer; }
