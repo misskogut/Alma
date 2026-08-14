@@ -293,7 +293,7 @@ export default function AlmaPrototype() {
         </button>
       </header>
 
-      <CycleHero profile={profile} days={days} activeIndex={activeIndex} quickAccessLabels={profile.quickAccessActions ?? []} selectedQuickActionLabels={activeSymptoms.filter((item) => item.zone === "general" && item.status === "confirmed").map((item) => item.label)} onToggleQuickAccess={(label) => toggleQuickAction({ label })} onSelectDay={selectDay} onOpenPeriod={() => setCycleSettingsOpen(true)} />
+      <CycleHero profile={profile} days={days} activeIndex={activeIndex} workingQuickActionLabels={profile.quickActions ?? ["Контрацептив", "Медитация", "Йога", "Дыхательная практика"]} quickAccessLabels={profile.quickAccessActions ?? []} selectedQuickActionLabels={activeSymptoms.filter((item) => item.zone === "general" && item.status === "confirmed").map((item) => item.label)} onToggleQuickAccess={(label) => toggleQuickAction({ label })} onUpdateQuickAccess={updateQuickAccessActions} onSelectDay={selectDay} onOpenPeriod={() => setCycleSettingsOpen(true)} />
 
       {!activeDay.isForecast ? <BodyCheckin values={activeDay.zones} symptoms={activeSymptoms} symptomHistory={symptomHistory} activeZone={activeZone} onSelect={setActiveZone} onBeginAdjustment={beginZoneAdjustment} onChange={changeZone} onCommit={commitState} onAddQuickSymptom={addSymptom} onUpdateQuickSymptom={updateSymptom} /> : <section className="forecast-card glass-card"><span>∿</span><div><p className="eyebrow">без ввода в будущее</p><h2>Это вероятный фон</h2><p>Состояние можно уточнить только для наступившего дня. Прогноз остаётся бледным и не смешивается с фактом.</p></div></section>}
 
