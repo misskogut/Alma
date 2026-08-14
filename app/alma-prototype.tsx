@@ -264,6 +264,14 @@ export default function AlmaPrototype() {
     if (userId) saveCloudProfile(userId, next).catch(() => setSyncMode("local"));
   }
 
+  function updateQuickActions(quickActions: string[]) {
+    const next = { ...profile, quickActions };
+    setProfile(next);
+    // The working set is also retained in the local ALMA snapshot. The current
+    // cloud profile schema only stores cycle settings, so this remains safely
+    // device-local until a dedicated preference field is introduced.
+  }
+
   function setLocation(latitude: number, longitude: number, locationName: string) {
     const next = { ...profile, latitude, longitude, locationName };
     setProfile(next);
@@ -311,7 +319,7 @@ export default function AlmaPrototype() {
       <footer className="app-footer"><p>Observation, not prescription</p><span>ALMA показывает совпадения и вероятный фон, не диагноз и не лечение.</span><i /></footer>
     </div>
 
-    {cycleSettingsOpen && <CycleSettingsSheet profile={profile} activeIso={activeDay.iso} selectedActionLabels={activeSymptoms.filter((item) => item.zone === "general" && item.status === "confirmed").map((item) => item.label)} onSave={saveProfile} onToggleQuickAction={toggleQuickAction} onClose={() => setCycleSettingsOpen(false)} />}
+    {cycleSettingsOpen && <CycleSettingsSheet profile={profile} activeIso={activeDay.iso} selectedActionLabels={activeSymptoms.filter((item) => item.zone === "general" && item.status === "confirmed").map((item) => item.label)} onSave={saveProfile} onToggleQuickAction={toggleQuickAction} onUpdateQuickActions={updateQuickActions} onClose={() => setCycleSettingsOpen(false)} />}
     {daySheetOpen && <DaySheet day={activeDay} environment={environment} symptoms={activeSymptoms} activeContexts={activeContexts} internalWaves={internalWaves} activeLayers={activeLayers} deviceSignals={null} onClose={() => setDaySheetOpen(false)} />}
     {connectionsOpen && <ConnectionsSheet day={activeDay} days={days} environment={environment} onClose={() => setConnectionsOpen(false)} />}
   </main>;
