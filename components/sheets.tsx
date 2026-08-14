@@ -65,6 +65,22 @@ export function DaySheet({ day, environment, symptoms, activeContexts, internalW
 
 const WEEKDAYS = ["пн", "вт", "ср", "чт", "пт", "сб", "вс"];
 const MONTH_LONG = new Intl.DateTimeFormat("ru-RU", { month: "long", year: "numeric", timeZone: "UTC" });
+type QuickAction = { label: string; icon: string; group: "Бережный ритм" | "Тело и контекст" };
+const DEFAULT_QUICK_ACTIONS: QuickAction[] = [
+  { label: "Контрацептив", icon: "◌", group: "Тело и контекст" },
+  { label: "Медитация", icon: "✦", group: "Бережный ритм" },
+  { label: "Йога", icon: "⌁", group: "Бережный ритм" },
+  { label: "Дыхательная практика", icon: "◒", group: "Бережный ритм" },
+];
+const EXTRA_QUICK_ACTIONS: QuickAction[] = [
+  { label: "Прогулка", icon: "↗", group: "Бережный ритм" },
+  { label: "Дневник", icon: "▤", group: "Бережный ритм" },
+  { label: "Тренировка", icon: "◈", group: "Тело и контекст" },
+  { label: "Массаж", icon: "〰", group: "Тело и контекст" },
+  { label: "Алкоголь", icon: "◐", group: "Тело и контекст" },
+  { label: "Путешествие", icon: "⌖", group: "Тело и контекст" },
+  { label: "Болезнь или травма", icon: "＋", group: "Тело и контекст" },
+];
 
 function firstOfMonth(iso: string) {
   return `${iso.slice(0, 7)}-01`;
@@ -86,12 +102,16 @@ function calendarDays(monthIso: string) {
 export function CycleSettingsSheet({
   profile,
   activeIso,
+  selectedActionLabels,
   onSave,
+  onToggleQuickAction,
   onClose,
 }: {
   profile: AlmaProfile;
   activeIso: string;
+  selectedActionLabels: string[];
   onSave: (profile: AlmaProfile, focusIso?: string) => void;
+  onToggleQuickAction: (action: QuickAction) => void;
   onClose: () => void;
 }) {
   const currentIso = todayIso();
@@ -99,8 +119,9 @@ export function CycleSettingsSheet({
   const [visibleMonth, setVisibleMonth] = useState(firstOfMonth(initialMonth));
   const [selectedStart, setSelectedStart] = useState(profile.lastPeriodStart);
   const [duration, setDuration] = useState(profile.periodLength);
-  const [cycleLength, setCycleLength] = useState(profile.cycleLength);
   const [automaticHighlights, setAutomaticHighlights] = useState(profile.automaticHighlights);
+  const [periodFormOpen, setPeriodFormOpen] = useState(false);
+  const [actionsOpen, setActionsOpen] = useState(false);
   const days = useMemo(() => calendarDays(visibleMonth), [visibleMonth]);
   const currentMonth = firstOfMonth(currentIso);
 
@@ -109,7 +130,6 @@ export function CycleSettingsSheet({
       ...profile,
       lastPeriodStart: selectedStart,
       periodLength: duration,
-      cycleLength,
       automaticHighlights,
     }, selectedStart);
   }
@@ -117,10 +137,19 @@ export function CycleSettingsSheet({
   return <SheetLayer onClose={onClose}>
     <section className="bottom-sheet period-sheet" role="dialog" aria-modal="true" aria-labelledby="cycle-settings-title">
       <div className="sheet-handle" />
-      <header className="sheet-header"><div><p className="eyebrow">календарь цикла</p><h2 id="cycle-settings-title">Отметить месячные</h2></div><button type="button" aria-label="Закрыть" onClick={onClose}>×</button></header>
-      <p className="settings-intro">Выберите первый день, затем укажите длительность кружочками. Лотос и дуга перестроятся сразу после сохранения.</p>
+      <header className="sheet-header"><div><p className="eyebrow">отметки дня</p><h2 id="cycle-settings-title">Цикл и действия</h2></div><button type="button" aria-label="Закрыть" onClick={onClose}>×</button></header>
+      <p className="settings-intro">Отметь только то, что действительно было сегодня. Длина цикла постепенно уточняется по отмеченным началам.</p>
 
-      <div className="period-calendar">
+      <section className="quick-actions-block" aria-label="Быстрые отметки">
+        <div className="quick-actions-heading"><div><p className="eyebrow">быстрая отметка</p><strong>Что было сегодня?</strong></div><span>{selectedActionLabels.length ? `${selectedActionLabels.length} выбрано` : "по желанию"}</span></div>
+        <div className="quick-actions-grid">{DEFAULT_QUICK_ACTIONS.map((action) => <button key={action.label} type="button" className={selectedActionLabels.includes(action.label) ? "is-selected" : ""} aria-pressed={selectedActionLabels.includes(action.label)} onClick={() => onToggleQuickAction(action)}><i>{action.icon}</i><span>{action.label}</span></button>)}</div>
+        <button type="button" className={`quick-actions-more${actionsOpen ? " is-open" : ""}`} onClick={() => setActionsOpen((value) => !value)}>{actionsOpen ? "Скрыть варианты" : "＋ ещё"}</button>
+        {actionsOpen && <div className="quick-actions-extra">{(["Бережный ритм", "Тело и контекст"] as const).map((group) => <section key={group}><p>{group}</p><div>{EXTRA_QUICK_ACTIONS.filter((action) => action.group === group).map((action) => <button key={action.label} type="button" className={selectedActionLabels.includes(action.label) ? "is-selected" : ""} aria-pressed={selectedActionLabels.includes(action.label)} onClick={() => onToggleQuickAction(action)}><i>{action.icon}</i><span>{action.label}</span></button>)}</div></section>)}</div>}
+      </section>
+
+      <button className={`period-expand-trigger${periodFormOpen ? " is-open" : ""}`} type="button" aria-expanded={periodFormOpen} onClick={() => setPeriodFormOpen((value) => !value)}><span><i>●</i><b>{periodFormOpen ? "Отметка месячных" : "Отметить месячные"}</b><small>{periodFormOpen ? "выбери первый день и длительность" : "откроется календарь и выбор дней"}</small></span><em>{periodFormOpen ? "−" : "＋"}</em></button>
+
+      {periodFormOpen && <><div className="period-calendar">
         <header className="calendar-header">
           <button type="button" onClick={() => setVisibleMonth(shiftMonth(visibleMonth, -1))} aria-label="Предыдущий месяц">‹</button>
           <strong>{MONTH_LONG.format(dateFromIso(visibleMonth))}</strong>
@@ -165,14 +194,9 @@ export function CycleSettingsSheet({
         })}</div>
       </fieldset>
 
-      <div className="cycle-length-setting">
-        <span><small>Средняя длина цикла</small><strong>{cycleLength} дней</strong></span>
-        <div><button type="button" disabled={cycleLength <= 21} onClick={() => setCycleLength((value) => Math.max(21, value - 1))}>−</button><button type="button" disabled={cycleLength >= 45} onClick={() => setCycleLength((value) => Math.min(45, value + 1))}>＋</button></div>
-      </div>
-
       <label className="settings-toggle"><span><b>Автоподсветка фаз</b><small>Дуга показывает расчётные фазы и овуляцию</small></span><input type="checkbox" checked={automaticHighlights} onChange={(event) => setAutomaticHighlights(event.target.checked)} /></label>
       <button className="primary-action period-save" type="button" disabled={!selectedStart || selectedStart > currentIso} onClick={savePeriod}>отметить месячные</button>
-      <p className="settings-legal">Фазы, фертильное окно и овуляция рассчитываются ориентировочно. Это календарное наблюдение, не медицинское заключение.</p>
+      <p className="settings-legal">Фазы, фертильное окно и овуляция рассчитываются ориентировочно. Это календарное наблюдение, не медицинское заключение.</p></>}
     </section>
   </SheetLayer>;
 }
