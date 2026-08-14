@@ -273,7 +273,7 @@ export default function AlmaPrototype() {
 
       {!activeDay.isForecast ? <>
         <SymptomCheck symptoms={activeSymptoms} onUpdate={updateSymptom} onAdd={addSymptom} />
-        <BodyCheckin values={activeDay.zones} activeZone={activeZone} onSelect={setActiveZone} onChange={changeZone} onCommit={commitState} onAddQuickSymptom={addSymptom} />
+        <BodyCheckin values={activeDay.zones} symptoms={activeSymptoms} activeZone={activeZone} onSelect={setActiveZone} onChange={changeZone} onCommit={commitState} onAddQuickSymptom={addSymptom} />
       </> : <section className="forecast-card glass-card"><span>∿</span><div><p className="eyebrow">без ввода в будущее</p><h2>Это вероятный фон</h2><p>Состояние можно уточнить только для наступившего дня. Прогноз остаётся бледным и не смешивается с фактом.</p></div></section>}
 
       <EnvironmentPanel environment={environment} loading={environmentLoading} error={environmentError} onReload={() => setReloadEnvironment((value) => value + 1)} onLocation={setLocation} />
