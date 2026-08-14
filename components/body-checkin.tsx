@@ -24,9 +24,11 @@ const neutralValues = (): Record<ActiveControl, number> => ({ cognitive: 0, emot
 const formatValue = (value: number) => value > 0 ? `+${value}` : `${value}`;
 const describeRange = (value: number) => {
   if (value <= -67) return "сильно негативно";
-  if (value <= -18) return "слегка негативно";
-  if (value < 18) return "нейтрально";
-  if (value < 67) return "слегка позитивно";
+  if (value <= -34) return "умеренно негативно";
+  if (value < 0) return "слегка негативно";
+  if (value === 0) return "нейтрально";
+  if (value <= 33) return "слегка позитивно";
+  if (value <= 66) return "умеренно позитивно";
   return "сильно позитивно";
 };
 
