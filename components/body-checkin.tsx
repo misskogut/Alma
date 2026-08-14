@@ -6,7 +6,7 @@ import { bodySilhouetteAsset } from "../lib/visual-assets";
 import { controlAssets } from "../lib/control-assets";
 
 type ActiveControl = "cognitive" | "emotional" | "libido";
-type Props = { values: ZoneValues; activeZone: ZoneKey | null; onSelect: (zone: ZoneKey) => void; onChange: (zone: ZoneKey, value: number) => void; onCommit: () => void; onAddQuickSymptom: (symptom: SymptomEntry) => void; };
+type Props = { values: ZoneValues; symptoms: SymptomEntry[]; activeZone: ZoneKey | null; onSelect: (zone: ZoneKey) => void; onChange: (zone: ZoneKey, value: number) => void; onCommit: () => void; onAddQuickSymptom: (symptom: SymptomEntry) => void; };
 
 const zones: ActiveControl[] = ["cognitive", "emotional", "libido"];
 const suggested: Record<ActiveControl, { negative: string[]; positive: string[] }> = {
@@ -30,14 +30,18 @@ const describeRange = (value: number) => {
   return "сильно позитивно";
 };
 
-export default function BodyCheckin({ values: _values, activeZone: _activeZone, onSelect, onChange, onCommit, onAddQuickSymptom }: Props) {
+export default function BodyCheckin({ values, symptoms: confirmedSymptoms, activeZone: _activeZone, onSelect, onChange, onCommit, onAddQuickSymptom }: Props) {
   const [openControl, setOpenControl] = useState<ActiveControl | null>(null);
   const [dragging, setDragging] = useState(false);
+  const [detailZone, setDetailZone] = useState<ActiveControl | null>(null);
+  const [infoOpen, setInfoOpen] = useState(false);
   const [customMode, setCustomMode] = useState(false);
   const [customText, setCustomText] = useState("");
   const [positions, setPositions] = useState<Record<ActiveControl, number>>(centeredPositions);
-  const [visualValues, setVisualValues] = useState<Record<ActiveControl, number>>(neutralValues);
+  const [visualValues, setVisualValues] = useState<Record<ActiveControl, number>>(() => ({ cognitive: values.cognitive, emotional: values.emotional, libido: values.libido }));
   const controlRefs = useRef<Partial<Record<ActiveControl, HTMLDivElement | null>>>({});
+  const pointerStart = useRef<{ x: number; y: number } | null>(null);
+  const didDrag = useRef(false);
 
   const closeControl = () => {
     if (!openControl) return;
@@ -64,16 +68,28 @@ export default function BodyCheckin({ values: _values, activeZone: _activeZone, 
       setVisualValues((current) => ({ ...current, [openControl]: 0 }));
     }
     setOpenControl(zone);
-    setDragging(true);
+    setDragging(false);
+    setDetailZone(null);
     setCustomMode(false);
     onSelect(zone);
     event.currentTarget.setPointerCapture(event.pointerId);
+    pointerStart.current = { x: event.clientX, y: event.clientY };
+    didDrag.current = false;
+  };
+  const move = (event: PointerEvent<HTMLButtonElement>, zone: ActiveControl) => {
+    const initial = pointerStart.current;
+    if (!initial) return;
+    if (!didDrag.current && Math.hypot(event.clientX - initial.x, event.clientY - initial.y) < 5) return;
+    didDrag.current = true;
+    setDragging(true);
     updateFromPointer(event, zone);
   };
   const finish = (event: PointerEvent<HTMLButtonElement>) => {
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
     setDragging(false);
-    onCommit();
+    pointerStart.current = null;
+    if (didDrag.current) onCommit();
+    else setDetailZone(openControl);
   };
   const value = openControl ? visualValues[openControl] : 0;
   const symptoms = openControl ? (value < 0 ? suggested[openControl].negative : suggested[openControl].positive) : [];
@@ -88,22 +104,26 @@ export default function BodyCheckin({ values: _values, activeZone: _activeZone, 
     if (!openControl || !label) return;
     chooseSymptom(label, 99);
   };
+  const detailValue = detailZone ? visualValues[detailZone] : 0;
+  const selectedSymptoms = detailZone ? confirmedSymptoms.filter((symptom) => symptom.zone === detailZone && symptom.status === "confirmed") : [];
 
   return <section className="body-card gesture-body-card glass-card" aria-labelledby="body-title">
     <header className="section-header"><div><p className="eyebrow">одно движение</p><h2 id="body-title">Уточнить состояние</h2></div><small>свайп от центра</small></header>
-    <div className="body-stage gesture-scene" onPointerDown={(event) => { if (event.target === event.currentTarget) closeControl(); }}>
+    <div className="body-stage gesture-scene" onPointerDown={(event) => { if (event.target === event.currentTarget) { setDetailZone(null); setInfoOpen(false); closeControl(); } }}>
       <img className="silhouette-art" src={bodySilhouetteAsset} alt="Нейоновый силуэт в позе лотоса" />
+      <button className="body-info-button" type="button" aria-label="Как работает ввод состояния" onPointerDown={(event) => event.stopPropagation()} onClick={() => { setDetailZone(null); setInfoOpen((current) => !current); }}>i</button>
       {zones.map((zone) => {
         const isOpen = openControl === zone;
         return <div key={zone} ref={(node) => { controlRefs.current[zone] = node; }} className={`gesture-control ${zone} ${isOpen ? "is-open" : ""}`} style={{ "--zone-color": ZONE_META[zone].color, "--button-x": `${positions[zone]}%` } as CSSProperties}>
           {isOpen && <div className="gesture-track" aria-hidden="true"><i className="track-line" /><b className="track-zero" /><span className="track-number start">−100</span><span className="track-number middle">0</span><span className="track-number end">+100</span></div>}
-          <button className="gesture-button" type="button" aria-label={ZONE_META[zone].label} onPointerDown={(event) => start(event, zone)} onPointerMove={(event) => { if (dragging && openControl === zone) updateFromPointer(event, zone); }} onPointerUp={finish} onPointerCancel={finish}>
+          <button className="gesture-button" type="button" aria-label={ZONE_META[zone].label} onPointerDown={(event) => start(event, zone)} onPointerMove={(event) => { if (openControl === zone) move(event, zone); }} onPointerUp={finish} onPointerCancel={finish}>
             <img className="control-image" src={controlAssets[zone]} alt="" />
-            <span>{ZONE_META[zone].short}</span>
           </button>
-          {isOpen && <output className="gesture-value"><b>{formatValue(visualValues[zone])}</b><small>{describeRange(visualValues[zone])}</small></output>}
+          {isOpen && <><output className="gesture-value"><b>{formatValue(visualValues[zone])}</b></output><span className="gesture-range-label">{describeRange(visualValues[zone])}</span></>}
         </div>;
       })}
+      {infoOpen && <aside className="body-info-popover" onPointerDown={(event) => event.stopPropagation()}><button type="button" aria-label="Закрыть" onClick={() => setInfoOpen(false)}>×</button><strong>Как отметить состояние</strong><p>Проведи значок влево или вправо: −100 — максимально негативный фон, +100 — максимально позитивный.</p><p>Короткий тап открывает текущий диапазон и отмеченные ощущения.</p></aside>}
+      {detailZone && <aside className="control-detail-popover" onPointerDown={(event) => event.stopPropagation()}><button type="button" aria-label="Закрыть" onClick={() => setDetailZone(null)}>×</button><p className="eyebrow">{ZONE_META[detailZone].label}</p><strong>{describeRange(detailValue)} · {formatValue(detailValue)}</strong><small>{selectedSymptoms.length ? <>Выбрано: {selectedSymptoms.map((symptom) => symptom.label).join(" · ")}</> : "Симптомы пока не выбраны"}</small></aside>}
       {openControl && !dragging && <div className={`floating-symptoms ${symptomSide} ${openControl}`} aria-label="Подходящие ощущения">
         {symptoms.map((label, index) => { const [left, top] = symptomPositions[openControl][symptomSide][index]; return <button key={label} type="button" style={{ left: `${left}%`, top: `${top}%`, "--delay": `${index * -.7}s` } as CSSProperties} onPointerDown={(event) => event.stopPropagation()} onClick={() => chooseSymptom(label, index)}>{label}</button>; })}
         {(() => { const [left, top] = symptomPositions[openControl][symptomSide][4]; return <button className="custom-symptom-trigger" type="button" style={{ left: `${left}%`, top: `${top}%`, "--delay": "-1.8s" } as CSSProperties} onPointerDown={(event) => event.stopPropagation()} onClick={() => setCustomMode(true)}>＋ своё</button>; })()}
