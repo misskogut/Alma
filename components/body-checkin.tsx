@@ -11,6 +11,7 @@ type Props = { values: ZoneValues; symptoms: SymptomEntry[]; symptomHistory: Sym
 const zones: ActiveControl[] = ["cognitive", "emotional", "libido"];
 type Band = "negativeLight" | "negativeMedium" | "negativeHigh" | "positiveLight" | "positiveMedium" | "positiveHigh";
 type SuggestionSet = { primary: string[]; more: string[] };
+type CatalogGroup = { title: string; labels: string[] };
 const suggested: Record<ActiveControl, Record<Band, SuggestionSet>> = {
   cognitive: {
     negativeLight: { primary: ["Легче отвлекаться", "Нужен более медленный старт", "Небольшая ментальная усталость"], more: ["Сложнее переключаться", "Меньше интереса к задачам", "Хочется паузы", "Замедленный темп", "Труднее собраться"] },
@@ -36,6 +37,21 @@ const suggested: Record<ActiveControl, Record<Band, SuggestionSet>> = {
     positiveMedium: { primary: ["Повышенное желание", "Тяга к близости", "Больше телесной энергии"], more: ["Выраженная чувственность", "Хочется инициативы", "Приятно флиртовать", "Хочется секса", "Уверенность в теле"] },
     positiveHigh: { primary: ["Сильное желание", "Много телесной энергии", "Очень высокая чувственность"], more: ["Сильная тяга к близости", "Хочется ярких ощущений", "Много инициативы", "Хочется игры", "Тело очень отзывчиво"] },
   },
+};
+const extraCatalog: Record<ActiveControl, CatalogGroup[]> = {
+  cognitive: [
+    { title: "Голова и ясность", labels: ["Головная боль", "Мигрень", "Ощущение тяжести в голове", "Чувствительность к шуму", "Трудно подобрать слова", "Снижение памяти"] },
+    { title: "Сон и восстановление", labels: ["Сонливость", "Бессонница", "Неспокойный сон", "Раннее пробуждение", "Нужен дневной отдых"] },
+  ],
+  emotional: [
+    { title: "Настроение", labels: ["Спокойствие", "Радость", "Много энергии", "Игривость", "Перепады настроения", "Грусть", "Тревога", "Апатия", "Растерянность", "Подавленность"] },
+    { title: "Напряжение и отношение к себе", labels: ["Стресс", "Чувство вины", "Навязчивые мысли", "Жёсткая самокритика", "Ощущение одиночества", "Хочется поддержки", "Раздражение"] },
+  ],
+  libido: [
+    { title: "Низ живота и тело", labels: ["Боль внизу живота", "Спазмы внизу живота", "Чувствительная грудь", "Боль в спине", "Вздутие живота", "Тошнота", "Запор", "Диарея", "Повышенный аппетит", "Прыщи", "Приливы жара", "Ночная потливость", "Боль в суставах"] },
+    { title: "Интимный телесный фон", labels: ["Сухость во влагалище", "Зуд во влагалище", "Выделений нет", "Кремообразные выделения", "Водянистые выделения", "Липкие выделения", "Слизистые выделения", "Кровомажущие выделения", "Нетипичные выделения"] },
+    { title: "Близость и желание", labels: ["Слабое желание", "Среднее желание", "Сильное желание", "Интимные прикосновения", "Мастурбация", "Оргазм", "Секс с защитой", "Секс без защиты", "Оральный секс", "Анальный секс"] },
+  ],
 };
 const symptomPositions: Record<ActiveControl, Record<"left" | "right", Array<[number, number]>>> = {
   cognitive: { left: [[4, 10], [7, 22], [12, 33], [3, 45], [15, 55]], right: [[64, 9], [71, 21], [61, 34], [68, 46], [59, 57]] },
@@ -148,10 +164,17 @@ export default function BodyCheckin({ values, symptoms: confirmedSymptoms, sympt
   const candidateSet = openControl ? suggested[openControl][getBand(value)] : null;
   const historyCounts = new Map<string, number>();
   if (openControl) symptomHistory.filter((symptom) => symptom.status === "confirmed" && symptom.zone === openControl).forEach((symptom) => historyCounts.set(symptom.label, (historyCounts.get(symptom.label) ?? 0) + 1));
-  const rankSymptoms = (labels: string[]) => [...labels].sort((a, b) => (historyCounts.get(b) ?? 0) - (historyCounts.get(a) ?? 0) || labels.indexOf(a) - labels.indexOf(b));
+  const unique = (labels: string[]) => Array.from(new Set(labels));
+  const rankSymptoms = (labels: string[]) => unique(labels).sort((a, b) => (historyCounts.get(b) ?? 0) - (historyCounts.get(a) ?? 0) || labels.indexOf(a) - labels.indexOf(b));
   const rankedSymptoms = candidateSet ? rankSymptoms([...candidateSet.primary, ...candidateSet.more]) : [];
   const symptoms = rankedSymptoms.slice(0, 3);
-  const moreSymptoms = rankedSymptoms.slice(3);
+  const currentLabels = candidateSet ? unique([...candidateSet.primary, ...candidateSet.more]) : [];
+  const allRangeLabels = openControl ? unique(Object.values(suggested[openControl]).flatMap((set) => [...set.primary, ...set.more])) : [];
+  const catalogGroups = openControl && candidateSet ? [
+    { title: "Этот диапазон", labels: rankSymptoms(currentLabels) },
+    { title: "Другие ощущения этой зоны", labels: rankSymptoms(allRangeLabels.filter((label) => !currentLabels.includes(label))) },
+    ...extraCatalog[openControl].map((group) => ({ ...group, labels: rankSymptoms(group.labels) })),
+  ].filter((group) => group.labels.length) : [];
   const symptomSide = value < 0 ? "right" : "left";
   const chooseSymptom = (label: string, index: number) => {
     if (!openControl) return;
@@ -203,9 +226,9 @@ export default function BodyCheckin({ values, symptoms: confirmedSymptoms, sympt
       </div>}
       {moreOpen && openControl && !detailZone && <aside className="more-symptoms-panel" style={{ "--zone-color": ZONE_META[openControl].color } as CSSProperties} onPointerDown={(event) => event.stopPropagation()}>
         <button className="more-close" type="button" aria-label="Закрыть дополнительные ощущения" onClick={() => setMoreOpen(false)}>×</button>
-        <p className="eyebrow">ещё подходящие ощущения</p><strong>{ZONE_META[openControl].label} · {describeRange(value)}</strong>
-        <small>Сначала — частые и распространённые варианты. Со временем личные выборы поднимаются выше.</small>
-        <div className="more-symptom-list">{moreSymptoms.map((label, index) => { const selected = confirmedSymptoms.some((symptom) => symptom.zone === openControl && symptom.status === "confirmed" && symptom.label === label); return <button className={selected ? "is-selected" : ""} key={label} type="button" onClick={() => chooseSymptom(label, index + 10)}>{label}</button>; })}</div>
+        <p className="eyebrow">полный список этой зоны</p><strong>{ZONE_META[openControl].label} · {describeRange(value)}</strong>
+        <small>Верхние подсказки — предположение для выбранного диапазона. Здесь можно отметить любое подходящее ощущение этой зоны; частые личные выборы со временем поднимаются выше.</small>
+        {catalogGroups.map((group, groupIndex) => <section className="more-symptom-group" key={group.title}><p>{group.title}</p><div className="more-symptom-list">{group.labels.map((label, index) => { const selected = confirmedSymptoms.some((symptom) => symptom.zone === openControl && symptom.status === "confirmed" && symptom.label === label); return <button className={selected ? "is-selected" : ""} key={label} type="button" onClick={() => chooseSymptom(label, groupIndex * 100 + index + 10)}>{label}</button>; })}</div></section>)}
         <form className="more-custom-entry" onSubmit={(event) => { event.preventDefault(); submitCustom(); }}><input value={customText} onChange={(event) => setCustomText(event.target.value)} placeholder="Добавить своё ощущение" /><button type="submit">Добавить</button></form>
       </aside>}
     </div>
