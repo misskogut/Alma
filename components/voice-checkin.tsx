@@ -54,7 +54,9 @@ export default function VoiceCheckinSheet({ actionLabels, onConfirm, onClose }: 
   const [notice, setNotice] = useState("Слушаю. Расскажи свободно, как прошёл день.");
   const [draft, setDraft] = useState<VoiceDraft>({ transcript: "", zones: {}, symptoms: [], actions: [] });
   const [customSymptom, setCustomSymptom] = useState("");
+  const [isListening, setIsListening] = useState(false);
   const recognition = useRef<Recognition | null>(null);
+  const closeSheet = () => { recognition.current?.stop(); onClose(); };
 
   function buildDraft(nextTranscript = transcript) { const next = parseDraft(nextTranscript, actionLabels); setDraft(next); setMode("review"); }
   function startListening() {
@@ -64,8 +66,8 @@ export default function VoiceCheckinSheet({ actionLabels, onConfirm, onClose }: 
       const instance = new Factory(); recognition.current = instance; instance.lang = "ru-RU"; instance.continuous = true; instance.interimResults = true;
       instance.onresult = (event) => { let next = ""; for (let index = 0; index < event.results.length; index += 1) next += event.results[index][0].transcript; setTranscript(next.trim()); };
       instance.onerror = (event) => setNotice(event.error === "not-allowed" ? "Нужен доступ к микрофону. Разреши его или введи заметку текстом." : "Не удалось распознать речь. Можно продолжить текстом.");
-      instance.onend = () => { recognition.current = null; };
-      instance.start(); setNotice("Запись идёт — можно говорить в обычном темпе.");
+      instance.onend = () => { recognition.current = null; setIsListening(false); };
+      instance.start(); setIsListening(true); setNotice("Запись идёт — можно говорить в обычном темпе.");
     } catch { setNotice("Микрофон уже занят или недоступен. Можно вписать заметку текстом."); }
   }
 
@@ -82,9 +84,9 @@ export default function VoiceCheckinSheet({ actionLabels, onConfirm, onClose }: 
   return <div className="sheet-layer voice-layer" role="presentation">
     <section className="bottom-sheet voice-sheet" role="dialog" aria-modal="true" aria-labelledby="voice-title">
       <div className="sheet-handle" />
-      <header className="sheet-header"><div><p className="eyebrow">быстрый разбор дня</p><h2 id="voice-title">{mode === "recording" ? "Расскажи, как было" : "Проверь, что отметила ALMA"}</h2></div><button type="button" aria-label="Закрыть" onClick={onClose}>×</button></header>
+      <header className="sheet-header"><div><p className="eyebrow">быстрый разбор дня</p><h2 id="voice-title">{mode === "recording" ? "Расскажи, как было" : "Проверь, что отметила ALMA"}</h2></div><button type="button" aria-label="Закрыть" onClick={closeSheet}>×</button></header>
       {mode === "recording" ? <>
-        <button className="voice-orb is-listening" type="button" onClick={() => recognition.current ? recognition.current.stop() : startListening()} aria-label="Микрофон"><i>⌁</i><span>говорю</span></button>
+        <button className={`voice-orb${isListening ? " is-listening" : ""}`} type="button" onClick={() => recognition.current ? recognition.current.stop() : startListening()} aria-label="Начать или остановить запись"><svg viewBox="0 0 48 48" aria-hidden="true"><defs><linearGradient id="voice-orb-rainbow" x1="8" y1="8" x2="40" y2="40"><stop stopColor="#6ce8ff"/><stop offset=".34" stopColor="#a979ff"/><stop offset=".68" stopColor="#ff83c9"/><stop offset="1" stopColor="#ffd176"/></linearGradient></defs><rect x="17" y="7" width="14" height="23" rx="7"/><path d="M12 24a12 12 0 0 0 24 0M24 36v6M17 42h14"/></svg><span>{isListening ? "запись идёт" : "нажми и говори"}</span></button>
         <p className="voice-notice">{notice}</p>
         <textarea className="voice-transcript" value={transcript} onChange={(event) => setTranscript(event.target.value)} placeholder="Например: плохо спала, было трудно сосредоточиться, вечером йога" />
         <button className="voice-finish" type="button" onClick={() => { recognition.current?.stop(); buildDraft(); }}>Закончить и разобрать</button>
@@ -97,7 +99,7 @@ export default function VoiceCheckinSheet({ actionLabels, onConfirm, onClose }: 
         <div className="voice-custom"><input value={customSymptom} onChange={(event) => setCustomSymptom(event.target.value)} placeholder="Добавить своё ощущение" /><button type="button" onClick={addCustom}>＋</button></div>
         <p className="voice-section-label">Действия</p>
         <div className="voice-actions">{actionLabels.map((label) => <button key={label} className={draft.actions.includes(label) ? "is-selected" : ""} type="button" onClick={() => toggleAction(label)}><i>{draft.actions.includes(label) ? "✓" : "＋"}</i>{label}</button>)}</div>
-        <button className="voice-confirm" type="button" onClick={() => { onConfirm({ ...draft, transcript }); onClose(); }}>Подтвердить отметки</button>
+        <button className="voice-confirm" type="button" onClick={() => { onConfirm({ ...draft, transcript }); closeSheet(); }}>Подтвердить отметки</button>
       </>}
     </section>
   </div>;
