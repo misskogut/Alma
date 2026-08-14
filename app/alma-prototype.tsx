@@ -7,6 +7,7 @@ import EnvironmentPanel, { ContextStrip } from "../components/environment-panel"
 import { ConnectionsSheet, CycleSettingsSheet, DaySheet } from "../components/sheets";
 import SymptomCheck from "../components/symptom-check";
 import WaveChart from "../components/wave-chart";
+import VoiceCheckinSheet, { type VoiceDraft } from "../components/voice-checkin";
 import type { AlmaProfile, ContextKey, EnvironmentPayload, SymptomEntry, SyncMode, WaveLayerKey, ZoneKey, ZoneValues } from "../lib/alma";
 import { DEFAULT_SYMPTOMS, TIMELINE_RADIUS, ZONE_META, addDays, buildDayModels, defaultProfile, defaultState, formatShortDate, phaseLabel, relativeDayLabel, todayIso } from "../lib/alma";
 import { bootstrapCloud, saveCloudEnvironment, saveCloudProfile, saveCloudState, saveCloudSymptom } from "../lib/supabase";
@@ -83,6 +84,7 @@ export default function AlmaPrototype() {
   const [cycleSettingsOpen, setCycleSettingsOpen] = useState(false);
   const [daySheetOpen, setDaySheetOpen] = useState(false);
   const [connectionsOpen, setConnectionsOpen] = useState(false);
+  const [voiceCheckinOpen, setVoiceCheckinOpen] = useState(false);
   const pendingValues = useRef<ZoneValues | null>(null);
 
   const days = useMemo(() => buildDayModels(profile, stateByDate, currentIso), [profile, stateByDate, currentIso]);
@@ -277,6 +279,24 @@ export default function AlmaPrototype() {
     setProfile({ ...profile, quickAccessActions: quickAccessActions.slice(0, 5) });
   }
 
+  function applyVoiceDraft(draft: VoiceDraft) {
+    const nextZones = { ...activeDay.zones, ...draft.zones };
+    setStateByDate((current) => ({ ...current, [activeDay.iso]: nextZones }));
+    if (userId) saveCloudState(userId, activeDay.iso, nextZones).catch(() => setSyncMode("local"));
+    const incoming = [...draft.symptoms, ...draft.actions.map((label) => ({ label, zone: "general" as const, intensity: 0 }))];
+    setSymptomsByDate((current) => {
+      const existing = current[activeDay.iso] ?? [];
+      const next = [...existing];
+      incoming.forEach((item) => {
+        const found = next.findIndex((symptom) => symptom.label === item.label && symptom.zone === item.zone);
+        const symptom: SymptomEntry = { id: found >= 0 ? next[found].id : `voice-${activeDay.iso}-${item.label.toLowerCase().replace(/[^a-zа-яё0-9]+/giu, "-")}`, label: item.label, zone: item.zone, status: "confirmed", intensity: item.intensity, suggestedBy: "user" };
+        if (found >= 0) next[found] = symptom; else next.push(symptom);
+        if (userId) saveCloudSymptom(userId, activeDay.iso, symptom).catch(() => setSyncMode("local"));
+      });
+      return { ...current, [activeDay.iso]: next };
+    });
+  }
+
   function setLocation(latitude: number, longitude: number, locationName: string) {
     const next = { ...profile, latitude, longitude, locationName };
     setProfile(next);
@@ -293,7 +313,7 @@ export default function AlmaPrototype() {
         </button>
       </header>
 
-      <CycleHero profile={profile} days={days} activeIndex={activeIndex} workingQuickActionLabels={profile.quickActions ?? ["Контрацептив", "Медитация", "Йога", "Дыхательная практика"]} quickAccessLabels={profile.quickAccessActions ?? []} selectedQuickActionLabels={activeSymptoms.filter((item) => item.zone === "general" && item.status === "confirmed").map((item) => item.label)} onToggleQuickAccess={(label) => toggleQuickAction({ label })} onUpdateQuickAccess={updateQuickAccessActions} onSelectDay={selectDay} onOpenPeriod={() => setCycleSettingsOpen(true)} />
+      <CycleHero profile={profile} days={days} activeIndex={activeIndex} workingQuickActionLabels={profile.quickActions ?? ["Контрацептив", "Медитация", "Йога", "Дыхательная практика"]} quickAccessLabels={profile.quickAccessActions ?? []} selectedQuickActionLabels={activeSymptoms.filter((item) => item.zone === "general" && item.status === "confirmed").map((item) => item.label)} onToggleQuickAccess={(label) => toggleQuickAction({ label })} onUpdateQuickAccess={updateQuickAccessActions} onOpenVoice={() => setVoiceCheckinOpen(true)} onSelectDay={selectDay} onOpenPeriod={() => setCycleSettingsOpen(true)} />
 
       {!activeDay.isForecast ? <BodyCheckin values={activeDay.zones} symptoms={activeSymptoms} symptomHistory={symptomHistory} activeZone={activeZone} onSelect={setActiveZone} onBeginAdjustment={beginZoneAdjustment} onChange={changeZone} onCommit={commitState} onAddQuickSymptom={addSymptom} onUpdateQuickSymptom={updateSymptom} /> : <section className="forecast-card glass-card"><span>∿</span><div><p className="eyebrow">без ввода в будущее</p><h2>Это вероятный фон</h2><p>Состояние можно уточнить только для наступившего дня. Прогноз остаётся бледным и не смешивается с фактом.</p></div></section>}
 
@@ -327,5 +347,6 @@ export default function AlmaPrototype() {
     {cycleSettingsOpen && <CycleSettingsSheet profile={profile} activeIso={activeDay.iso} selectedActionLabels={activeSymptoms.filter((item) => item.zone === "general" && item.status === "confirmed").map((item) => item.label)} onSave={saveProfile} onToggleQuickAction={toggleQuickAction} onUpdateQuickActions={updateQuickActions} onUpdateQuickAccess={updateQuickAccessActions} onClose={() => setCycleSettingsOpen(false)} />}
     {daySheetOpen && <DaySheet day={activeDay} environment={environment} symptoms={activeSymptoms} activeContexts={activeContexts} internalWaves={internalWaves} activeLayers={activeLayers} deviceSignals={null} onClose={() => setDaySheetOpen(false)} />}
     {connectionsOpen && <ConnectionsSheet day={activeDay} days={days} environment={environment} onClose={() => setConnectionsOpen(false)} />}
+    {voiceCheckinOpen && <VoiceCheckinSheet actionLabels={profile.quickActions ?? ["Контрацептив", "Медитация", "Йога", "Дыхательная практика"]} onConfirm={applyVoiceDraft} onClose={() => setVoiceCheckinOpen(false)} />}
   </main>;
 }
