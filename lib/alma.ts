@@ -235,13 +235,13 @@ export function phaseHint(phase: CyclePhase) {
 }
 
 export function feelingLabel(value: number) {
-  if (value <= -67) return "сильно негативно";
-  if (value <= -34) return "умеренно негативно";
-  if (value < 0) return "слегка негативно";
+  if (value <= -67) return "высокая негативная";
+  if (value <= -34) return "средняя негативная";
+  if (value < 0) return "лёгкая негативная";
   if (value === 0) return "нейтрально";
-  if (value <= 33) return "слегка позитивно";
-  if (value <= 66) return "умеренно позитивно";
-  return "сильно позитивно";
+  if (value <= 33) return "лёгкая позитивная";
+  if (value <= 66) return "средняя позитивная";
+  return "высокая позитивная";
 }
 
 export function relativeDayLabel(iso: string, currentIso = todayIso()) {
