@@ -235,12 +235,12 @@ export function phaseHint(phase: CyclePhase) {
 }
 
 export function feelingLabel(value: number) {
-  if (value <= -70) return "сильно негативно";
-  if (value <= -30) return "скорее негативно";
-  if (value < -10) return "слегка негативно";
-  if (value <= 10) return "нейтрально";
-  if (value < 30) return "слегка позитивно";
-  if (value < 70) return "скорее позитивно";
+  if (value <= -67) return "сильно негативно";
+  if (value <= -34) return "умеренно негативно";
+  if (value < 0) return "слегка негативно";
+  if (value === 0) return "нейтрально";
+  if (value <= 33) return "слегка позитивно";
+  if (value <= 66) return "умеренно позитивно";
   return "сильно позитивно";
 }
 
