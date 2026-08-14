@@ -6,7 +6,7 @@ import { bodySilhouetteAsset } from "../lib/visual-assets";
 import { controlAssets } from "../lib/control-assets";
 
 type ActiveControl = "cognitive" | "emotional" | "libido";
-type Props = { values: ZoneValues; symptoms: SymptomEntry[]; activeZone: ZoneKey | null; onSelect: (zone: ZoneKey) => void; onChange: (zone: ZoneKey, value: number) => void; onCommit: () => void; onAddQuickSymptom: (symptom: SymptomEntry) => void; };
+type Props = { values: ZoneValues; symptoms: SymptomEntry[]; activeZone: ZoneKey | null; onSelect: (zone: ZoneKey) => void; onBeginAdjustment: (zone: ZoneKey) => void; onChange: (zone: ZoneKey, value: number) => void; onCommit: () => void; onAddQuickSymptom: (symptom: SymptomEntry) => void; };
 
 const zones: ActiveControl[] = ["cognitive", "emotional", "libido"];
 const suggested: Record<ActiveControl, { negative: string[]; positive: string[] }> = {
@@ -31,7 +31,7 @@ const describeRange = (value: number) => {
   return "высокая позитивная";
 };
 
-export default function BodyCheckin({ values, symptoms: confirmedSymptoms, activeZone: _activeZone, onSelect, onChange, onCommit, onAddQuickSymptom }: Props) {
+export default function BodyCheckin({ values, symptoms: confirmedSymptoms, activeZone: _activeZone, onSelect, onBeginAdjustment, onChange, onCommit, onAddQuickSymptom }: Props) {
   const [openControl, setOpenControl] = useState<ActiveControl | null>(null);
   const [holding, setHolding] = useState(false);
   const [detailZone, setDetailZone] = useState<ActiveControl | null>(null);
@@ -104,6 +104,7 @@ export default function BodyCheckin({ values, symptoms: confirmedSymptoms, activ
       setOpenControl(zone);
       setHolding(true);
       onSelect(zone);
+      onBeginAdjustment(zone);
     }
     updateFromPointer(event, zone);
   };
