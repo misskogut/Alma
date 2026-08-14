@@ -51,6 +51,8 @@ export type AlmaProfile = {
   automaticHighlights: boolean;
   /** Personal working set for the cycle-sheet quick actions. */
   quickActions?: string[];
+  /** Actions created by the person; they remain available in the catalogue. */
+  actionCatalog?: string[];
 };
 
 export type SymptomStatus = "suggested" | "confirmed" | "dismissed";
