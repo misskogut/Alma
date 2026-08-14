@@ -53,6 +53,8 @@ export type AlmaProfile = {
   quickActions?: string[];
   /** Actions created by the person; they remain available in the catalogue. */
   actionCatalog?: string[];
+  /** Up to five actions kept on the main cycle screen for one-tap logging. */
+  quickAccessActions?: string[];
 };
 
 export type SymptomStatus = "suggested" | "confirmed" | "dismissed";
