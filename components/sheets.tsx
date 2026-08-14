@@ -153,9 +153,11 @@ export function CycleSettingsSheet({
   const [actionsOpen, setActionsOpen] = useState(false);
   const [customAction, setCustomAction] = useState("");
   const [draggedAction, setDraggedAction] = useState<string | null>(null);
+  const [dragPoint, setDragPoint] = useState<{ x: number; y: number } | null>(null);
   const dragStart = useRef<{ x: number; y: number; label: string } | null>(null);
   const didDrag = useRef(false);
   const suppressNextTap = useRef(false);
+  const lastHoverTarget = useRef<string | null>(null);
   const days = useMemo(() => calendarDays(visibleMonth), [visibleMonth]);
   const currentMonth = firstOfMonth(currentIso);
   const quickActionLabels = profile.quickActions ?? DEFAULT_QUICK_ACTIONS.map((action) => action.label);
@@ -193,6 +195,7 @@ export function CycleSettingsSheet({
     event.currentTarget.setPointerCapture(event.pointerId);
     dragStart.current = { x: event.clientX, y: event.clientY, label };
     didDrag.current = false;
+    lastHoverTarget.current = null;
   }
 
   function continueDrag(event: ReactPointerEvent<HTMLElement>) {
@@ -201,6 +204,15 @@ export function CycleSettingsSheet({
     if (!draggedAction && Math.hypot(event.clientX - start.x, event.clientY - start.y) > 8) {
       didDrag.current = true;
       setDraggedAction(start.label);
+      setDragPoint({ x: event.clientX, y: event.clientY });
+      return;
+    }
+    if (!draggedAction) return;
+    setDragPoint({ x: event.clientX, y: event.clientY });
+    const target = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>("[data-quick-action]")?.dataset.quickAction;
+    if (target && target !== draggedAction && target !== lastHoverTarget.current) {
+      moveQuickAction(draggedAction, target);
+      lastHoverTarget.current = target;
     }
   }
 
@@ -218,6 +230,8 @@ export function CycleSettingsSheet({
     dragStart.current = null;
     suppressNextTap.current = didDrag.current;
     setDraggedAction(null);
+    setDragPoint(null);
+    lastHoverTarget.current = null;
   }
 
   function savePeriod() {
@@ -252,6 +266,7 @@ export function CycleSettingsSheet({
           </div>)}
           {!quickActions.length && <p className="quick-actions-empty">Добавь действия из каталога ниже.</p>}
         </div>
+        {draggedAction && dragPoint && <div className="quick-action-ghost" style={{ left: dragPoint.x, top: dragPoint.y }} aria-hidden="true"><i>{quickActionFor(draggedAction).icon}</i><span>{draggedAction}</span></div>}
         <button type="button" className={`quick-actions-more${actionsOpen ? " is-open" : ""}`} onClick={() => setActionsOpen((value) => !value)}>{actionsOpen ? "Скрыть каталог" : "＋ добавить"}</button>
         {actionsOpen && <div className="quick-actions-extra quick-actions-catalog" data-quick-zone="catalog"><p className="quick-actions-catalog-intro">Нажми ＋, чтобы вернуть действие наверх. Удерживай рабочую кнопку и перетаскивай её для нового порядка.</p>{(["Бережный ритм", "Тело и контекст"] as const).map((group) => <section key={group}><p>{group}</p><div>{catalogActions.filter((action) => action.group === group).map((action) => <button key={action.label} type="button" onClick={() => addQuickAction(action.label)}><i>{action.icon}</i><span>{action.label}</span><b>＋</b></button>)}</div></section>)}<form className="quick-action-custom" onSubmit={(event) => { event.preventDefault(); addQuickAction(customAction); }}><input value={customAction} onChange={(event) => setCustomAction(event.target.value)} placeholder="Своё действие" maxLength={48} /><button type="submit" disabled={!customAction.trim()}>добавить</button></form></div>}
       </section>
