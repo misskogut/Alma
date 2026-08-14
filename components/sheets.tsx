@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import type { AlmaProfile, ContextKey, DayModel, DeviceSignals, EnvironmentPayload, SymptomEntry, WaveLayerKey, ZoneKey } from "../lib/alma";
 import { CONTEXT_META, ZONE_META, addDays, dateFromIso, daysBetween, feelingLabel, findDirectionalCoincidence, formatShortDate, isoFromDate, phaseLabel, pressureMmHg, relativeDayLabel, todayIso, weatherLabel } from "../lib/alma";
 
@@ -153,6 +153,9 @@ export function CycleSettingsSheet({
   const [actionsOpen, setActionsOpen] = useState(false);
   const [customAction, setCustomAction] = useState("");
   const [draggedAction, setDraggedAction] = useState<string | null>(null);
+  const dragStart = useRef<{ x: number; y: number; label: string } | null>(null);
+  const didDrag = useRef(false);
+  const suppressNextTap = useRef(false);
   const days = useMemo(() => calendarDays(visibleMonth), [visibleMonth]);
   const currentMonth = firstOfMonth(currentIso);
   const quickActionLabels = profile.quickActions ?? DEFAULT_QUICK_ACTIONS.map((action) => action.label);
@@ -166,10 +169,6 @@ export function CycleSettingsSheet({
     setCustomAction("");
   }
 
-  function removeQuickAction(label: string) {
-    onUpdateQuickActions(quickActionLabels.filter((item) => item !== label));
-  }
-
   function moveQuickAction(source: string, target: string) {
     if (source === target) return;
     const next = [...quickActionLabels];
@@ -181,16 +180,33 @@ export function CycleSettingsSheet({
     onUpdateQuickActions(next);
   }
 
-  function beginDrag(event: ReactPointerEvent<HTMLButtonElement>, label: string) {
-    event.preventDefault();
+  function beginDrag(event: ReactPointerEvent<HTMLElement>, label: string) {
+    if (!actionsOpen) return;
     event.currentTarget.setPointerCapture(event.pointerId);
-    setDraggedAction(label);
+    dragStart.current = { x: event.clientX, y: event.clientY, label };
+    didDrag.current = false;
   }
 
-  function continueDrag(event: ReactPointerEvent<HTMLButtonElement>) {
-    if (!draggedAction) return;
-    const target = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>("[data-quick-action]")?.dataset.quickAction;
-    if (target && target !== draggedAction) moveQuickAction(draggedAction, target);
+  function continueDrag(event: ReactPointerEvent<HTMLElement>) {
+    const start = dragStart.current;
+    if (!start) return;
+    if (!draggedAction && Math.hypot(event.clientX - start.x, event.clientY - start.y) > 8) {
+      didDrag.current = true;
+      setDraggedAction(start.label);
+    }
+  }
+
+  function finishDrag(event: ReactPointerEvent<HTMLElement>) {
+    const label = draggedAction;
+    const target = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>("[data-quick-zone]")?.dataset.quickZone;
+    if (label && target) {
+      const isActive = quickActionLabels.includes(label);
+      if (target === "active" && !isActive) onUpdateQuickActions([...quickActionLabels, label]);
+      if (target === "catalog" && isActive) onUpdateQuickActions(quickActionLabels.filter((item) => item !== label));
+    }
+    dragStart.current = null;
+    suppressNextTap.current = didDrag.current;
+    setDraggedAction(null);
   }
 
   function savePeriod() {
@@ -217,17 +233,15 @@ export function CycleSettingsSheet({
       <p className="settings-intro">Отметь только то, что действительно было сегодня. Длина цикла постепенно уточняется по отмеченным началам.</p>
 
       <section className="quick-actions-block" aria-label="Быстрые отметки">
-        <div className="quick-actions-heading"><div><p className="eyebrow">быстрая отметка</p><strong>Что было сегодня?</strong><small>Удержи ручку ⠿ и перетяни, чтобы изменить порядок.</small></div><span>{selectedActionLabels.length ? `${selectedActionLabels.length} выбрано` : "по желанию"}</span></div>
-        <div className="quick-actions-grid quick-actions-active">
+        <div className="quick-actions-heading"><div><p className="eyebrow">быстрая отметка</p><strong>Что было сегодня?</strong><small>{actionsOpen ? "Удержи и перетяни действие между наборами." : "Нажми, чтобы отметить действие сегодня."}</small></div><span>{selectedActionLabels.length ? `${selectedActionLabels.length} выбрано` : "по желанию"}</span></div>
+        <div className={`quick-actions-grid quick-actions-active${actionsOpen ? " is-editing" : ""}`} data-quick-zone="active">
           {quickActions.map((action) => <div className={`quick-action-card${draggedAction === action.label ? " is-dragging" : ""}`} data-quick-action={action.label} key={action.label}>
-            <button className="quick-action-main" type="button" aria-pressed={selectedActionLabels.includes(action.label)} onClick={() => onToggleQuickAction(action)}><i>{action.icon}</i><span>{action.label}</span></button>
-            <button className="quick-action-drag" type="button" aria-label={`Переместить ${action.label}`} onPointerDown={(event) => beginDrag(event, action.label)} onPointerMove={continueDrag} onPointerUp={() => setDraggedAction(null)} onPointerCancel={() => setDraggedAction(null)}>⠿</button>
-            <button className="quick-action-remove" type="button" aria-label={`Убрать ${action.label} из быстрого набора`} onClick={() => removeQuickAction(action.label)}>×</button>
+            <button className="quick-action-main" type="button" aria-pressed={selectedActionLabels.includes(action.label)} onClick={() => { if (suppressNextTap.current) { suppressNextTap.current = false; return; } onToggleQuickAction(action); }} onPointerDown={(event) => beginDrag(event, action.label)} onPointerMove={continueDrag} onPointerUp={finishDrag} onPointerCancel={() => { dragStart.current = null; setDraggedAction(null); }}><i>{action.icon}</i><span>{action.label}</span></button>
           </div>)}
           {!quickActions.length && <p className="quick-actions-empty">Добавь действия из каталога ниже.</p>}
         </div>
         <button type="button" className={`quick-actions-more${actionsOpen ? " is-open" : ""}`} onClick={() => setActionsOpen((value) => !value)}>{actionsOpen ? "Скрыть каталог" : "＋ добавить"}</button>
-        {actionsOpen && <div className="quick-actions-extra quick-actions-catalog"><p className="quick-actions-catalog-intro">Выбери действия для рабочего набора. Они появятся выше и будут доступны одним касанием.</p>{(["Бережный ритм", "Тело и контекст"] as const).map((group) => <section key={group}><p>{group}</p><div>{catalogActions.filter((action) => action.group === group).map((action) => <button key={action.label} type="button" onClick={() => addQuickAction(action.label)}><i>{action.icon}</i><span>{action.label}</span><b>＋</b></button>)}</div></section>)}<form className="quick-action-custom" onSubmit={(event) => { event.preventDefault(); addQuickAction(customAction); }}><input value={customAction} onChange={(event) => setCustomAction(event.target.value)} placeholder="Своё действие" maxLength={48} /><button type="submit" disabled={!customAction.trim()}>добавить</button></form></div>}
+        {actionsOpen && <div className="quick-actions-extra quick-actions-catalog" data-quick-zone="catalog"><p className="quick-actions-catalog-intro">Перетаскивай сюда, чтобы убрать из быстрого набора; тап — добавить наверх.</p>{(["Бережный ритм", "Тело и контекст"] as const).map((group) => <section key={group}><p>{group}</p><div>{catalogActions.filter((action) => action.group === group).map((action) => <button key={action.label} type="button" onClick={() => { if (suppressNextTap.current) { suppressNextTap.current = false; return; } addQuickAction(action.label); }} onPointerDown={(event) => beginDrag(event, action.label)} onPointerMove={continueDrag} onPointerUp={finishDrag} onPointerCancel={() => { dragStart.current = null; setDraggedAction(null); }}><i>{action.icon}</i><span>{action.label}</span><b>＋</b></button>)}</div></section>)}<form className="quick-action-custom" onSubmit={(event) => { event.preventDefault(); addQuickAction(customAction); }}><input value={customAction} onChange={(event) => setCustomAction(event.target.value)} placeholder="Своё действие" maxLength={48} /><button type="submit" disabled={!customAction.trim()}>добавить</button></form></div>}
       </section>
 
       <button className={`period-expand-trigger${periodFormOpen ? " is-open" : ""}`} type="button" aria-expanded={periodFormOpen} onClick={() => setPeriodFormOpen((value) => !value)}><span><i>●</i><b>{periodFormOpen ? "Отметка месячных" : "Отметить месячные"}</b><small>{periodFormOpen ? "выбери первый день и длительность" : "откроется календарь и выбор дней"}</small></span><em>{periodFormOpen ? "−" : "＋"}</em></button>
