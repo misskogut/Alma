@@ -94,8 +94,10 @@ export default function CycleHero({
   days,
   activeIndex,
   quickAccessLabels,
+  quickActionLabels,
   selectedQuickActionLabels,
   onToggleQuickAccess,
+  onUpdateQuickAccess,
   onSelectDay,
   onOpenPeriod,
 }: {
@@ -103,13 +105,16 @@ export default function CycleHero({
   days: DayModel[];
   activeIndex: number;
   quickAccessLabels: string[];
+  quickActionLabels: string[];
   selectedQuickActionLabels: string[];
   onToggleQuickAccess: (label: string) => void;
+  onUpdateQuickAccess: (labels: string[]) => void;
   onSelectDay: (index: number) => void;
   onOpenPeriod: () => void;
 }) {
   const [isDialInMotion, setIsDialInMotion] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
+  const [quickPickerOpen, setQuickPickerOpen] = useState(false);
   const [previewIndexState, setPreviewIndexState] = useState(activeIndex);
   const positionRef = useRef(activeIndex);
   const velocityRef = useRef(0);
@@ -538,10 +543,19 @@ export default function CycleHero({
       {!previewDay.isToday && todayIndex >= 0 ? <button className="return-today" type="button" onClick={() => select(todayIndex)}>вернуться к сегодня</button> : null}
     </div>
 
-    {quickAccessLabels.length > 0 && <div className="cycle-quick-access cycle-health-access" aria-label="Быстрые отметки цикла">
-      <p>быстро отметить</p>
+    <div className="cycle-quick-access cycle-health-access" aria-label="Быстрые отметки цикла">
       {quickAccessLabels.map((label) => <button key={label} className={selectedQuickActionLabels.includes(label) ? "is-selected" : ""} type="button" aria-pressed={selectedQuickActionLabels.includes(label)} onClick={() => onToggleQuickAccess(label)}><i>✦</i><span>{label}</span></button>)}
-    </div>}
+      {quickAccessLabels.length < 5 && <button className={`cycle-quick-access-add${quickPickerOpen ? " is-open" : ""}`} type="button" aria-label="Добавить быстрые действия" aria-expanded={quickPickerOpen} onClick={() => setQuickPickerOpen((value) => !value)}>＋</button>}
+      {quickPickerOpen && <div className="cycle-quick-picker" onPointerDown={(event) => event.stopPropagation()}>
+        <div><p>Быстрые действия</p><button type="button" aria-label="Закрыть выбор" onClick={() => setQuickPickerOpen(false)}>×</button></div>
+        <span>Выбери до пяти действий из набора «Мой цикл».</span>
+        <section>{quickActionLabels.map((label) => {
+          const chosen = quickAccessLabels.includes(label);
+          const disabled = !chosen && quickAccessLabels.length >= 5;
+          return <button key={label} className={chosen ? "is-selected" : ""} type="button" disabled={disabled} aria-pressed={chosen} onClick={() => onUpdateQuickAccess(chosen ? quickAccessLabels.filter((item) => item !== label) : [...quickAccessLabels, label])}><i>{chosen ? "✓" : "＋"}</i><span>{label}</span></button>;
+        })}</section>
+      </div>}
+    </div>
 
   </section>;
 }

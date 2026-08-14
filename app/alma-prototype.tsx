@@ -318,7 +318,7 @@ export default function AlmaPrototype() {
         </button>
       </header>
 
-      <CycleHero profile={profile} days={days} activeIndex={activeIndex} quickAccessLabels={profile.cycleQuickAccessActions ?? (profile.cycleActions ?? ["Контрацептив", "Секс", "Тест на овуляцию"]).slice(0, 3)} selectedQuickActionLabels={activeSymptoms.filter((item) => item.zone === "general" && item.status === "confirmed").map((item) => item.label)} onToggleQuickAccess={(label) => toggleQuickAction({ label })} onSelectDay={selectDay} onOpenPeriod={() => setCycleSettingsOpen(true)} />
+      <CycleHero profile={profile} days={days} activeIndex={activeIndex} quickAccessLabels={profile.cycleQuickAccessActions ?? (profile.cycleActions ?? ["Контрацептив", "Секс", "Тест на овуляцию"]).slice(0, 3)} quickActionLabels={profile.cycleActions ?? ["Контрацептив", "Секс", "Тест на овуляцию"]} selectedQuickActionLabels={activeSymptoms.filter((item) => item.zone === "general" && item.status === "confirmed").map((item) => item.label)} onToggleQuickAccess={(label) => toggleQuickAction({ label })} onUpdateQuickAccess={updateCycleQuickAccess} onSelectDay={selectDay} onOpenPeriod={() => setCycleSettingsOpen(true)} />
 
       {!activeDay.isForecast && <ActivityPanel actions={(profile.quickActions ?? []).filter((label) => !["Контрацептив", "Секс", "Мастурбация", "Тест на овуляцию"].includes(label))} catalog={profile.actionCatalog} selected={activeSymptoms.filter((item) => item.zone === "general" && item.status === "confirmed").map((item) => item.label)} onToggle={(label) => toggleQuickAction({ label })} onUpdate={updateActivityActions} />}
 
