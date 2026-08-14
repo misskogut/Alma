@@ -556,3 +556,11 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 1px solid 
 .activity-info-button { border-color: rgba(111, 223, 202, .38); color: #9cf0dc; box-shadow: 0 0 13px rgba(86, 222, 192, .14); }
 .activity-info-popover { position: relative; z-index: 12; margin-top: 10px; border: 1px solid rgba(107, 224, 200, .23); border-radius: 15px; padding: 12px 35px 11px 12px; background: rgba(7, 20, 19, .68); color: #9eabb0; font-size: 9px; line-height: 1.45; }
 .activity-question { margin: 13px 0 0; color: #e9f7f3; font-size: 12px; font-weight: 520; }
+
+.voice-custom { position: relative; align-items: center; padding-left: 31px; }
+.voice-custom > span { position: absolute; z-index: 1; left: 11px; color: #c991ee; font-size: 16px; line-height: 1; }
+.voice-custom input { width: 100%; }
+.voice-symptom-search { margin-top: 7px; display: flex; flex-wrap: wrap; gap: 6px; }
+.voice-symptom-search button { min-height: 29px; display: inline-flex; align-items: center; gap: 5px; border: 1px solid rgba(203, 143, 244, .25); border-radius: 999px; padding: 5px 9px; background: rgba(171, 87, 220, .09); color: #d7c8dd; font: inherit; font-size: 8px; cursor: pointer; }
+.voice-symptom-search button i { color: #d995ff; font-size: 11px; font-style: normal; }
+.voice-symptom-search .voice-add-new { border-style: dashed; color: #e3c0f4; }

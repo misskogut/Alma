@@ -106,11 +106,11 @@ export type EnvironmentPayload = {
 };
 
 export const ZONE_META: Record<ZoneKey, { label: string; short: string; color: string; negative: string; positive: string }> = {
-  cognitive: { label: "Когнитивное состояние", short: "когнитивное", color: "#58b8ff", negative: "сильно рассеянно", positive: "очень ясно" },
-  emotional: { label: "Эмоциональное состояние", short: "эмоциональное", color: "#ffc64d", negative: "сильно тяжело", positive: "очень легко" },
+  cognitive: { label: "Когнитивная нагрузка", short: "когнитивная", color: "#58b8ff", negative: "сильно рассеянно", positive: "очень ясно" },
+  emotional: { label: "Эмоциональная нагрузка", short: "эмоциональная", color: "#ffc64d", negative: "сильно тяжело", positive: "очень легко" },
   physical: { label: "Физическое состояние", short: "физическое", color: "#9d7bff", negative: "сильно истощено", positive: "много сил" },
   libido: { label: "Либидо", short: "либидо", color: "#ff648d", negative: "сильно снижено", positive: "сильно повышено" },
-  social: { label: "Социальное состояние", short: "социальное", color: "#57e7c8", negative: "сильно напряжённо", positive: "много поддержки" },
+  social: { label: "Социальное влияние", short: "социальное", color: "#57e7c8", negative: "сильно напряжённо", positive: "много поддержки" },
 };
 
 export const CONTEXT_META: Record<ContextKey, { label: string; unit: string; color: string }> = {

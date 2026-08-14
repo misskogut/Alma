@@ -20,10 +20,14 @@ type RecognitionFactory = new () => Recognition;
 declare global { interface Window { SpeechRecognition?: RecognitionFactory; webkitSpeechRecognition?: RecognitionFactory; } }
 
 const SIGNS: Array<{ words: string[]; zone: Exclude<ZoneKey, "physical">; value: number; symptom?: VoiceSymptom }> = [
-  { words: ["много когнитивной нагрузки", "много работал", "много работала", "продуктив", "успела много"], zone: "cognitive", value: 76 },
+  { words: ["много когнитивной нагрузки", "много работал", "много работала", "продуктив", "успела много", "много задач"], zone: "cognitive", value: 76, symptom: { label: "Высокая рабочая нагрузка", zone: "cognitive", intensity: 76 } },
   { words: ["туман", "тяжелая голова", "тяжёлая голова", "не могу сосредоточ", "трудно сосредоточ", "рассеян"], zone: "cognitive", value: -58, symptom: { label: "Труднее сосредоточиться", zone: "cognitive", intensity: 58 } },
   { words: ["ясная голова", "концентрац", "собран"], zone: "cognitive", value: 56, symptom: { label: "Ясность в голове", zone: "cognitive", intensity: 56 } },
-  { words: ["тревог", "раздраж", "груст", "плакс", "тяжело эмоцион"], zone: "emotional", value: -52, symptom: { label: "Эмоциональная чувствительность", zone: "emotional", intensity: 52 } },
+  { words: ["плакс", "тяжело эмоцион", "плохо"], zone: "emotional", value: -42, symptom: { label: "Эмоциональная чувствительность", zone: "emotional", intensity: 42 } },
+  { words: ["груст"], zone: "emotional", value: -42, symptom: { label: "Грусть", zone: "emotional", intensity: 42 } },
+  { words: ["тревог"], zone: "emotional", value: -46, symptom: { label: "Тревога", zone: "emotional", intensity: 46 } },
+  { words: ["раздраж"], zone: "emotional", value: -44, symptom: { label: "Раздражительность", zone: "emotional", intensity: 44 } },
+  { words: ["поругал", "конфликт", "ссор"], zone: "emotional", value: -28, symptom: { label: "Напряжение после конфликта", zone: "emotional", intensity: 68 } },
   { words: ["счастлив", "радост", "довольн", "спокой", "легко на душе", "вдохнов"], zone: "emotional", value: 72, symptom: { label: "Эмоциональная устойчивость", zone: "emotional", intensity: 72 } },
   { words: ["не хочу близост", "либидо низк", "нет желания"], zone: "libido", value: -54, symptom: { label: "Снижение желания", zone: "libido", intensity: 54 } },
   { words: ["хочу близост", "возбужд", "либидо высок", "сильное желание"], zone: "libido", value: 58, symptom: { label: "Повышенное желание", zone: "libido", intensity: 58 } },
@@ -38,13 +42,28 @@ const ACTION_ALIASES: Record<string, string[]> = {
 const EXTRA_FROM_SPEECH: Array<{ words: string[]; suggestion: VoiceSuggestion }> = [
   { words: ["устал", "устала", "усталость"], suggestion: { kind: "symptom", label: "Усталость", zone: "general", intensity: 45 } },
   { words: ["головн", "болит голова"], suggestion: { kind: "symptom", label: "Головная боль", zone: "cognitive", intensity: 52 } },
-  { words: ["тошнот"], suggestion: { kind: "symptom", label: "Тошнота", zone: "general", intensity: 45 } },
+  { words: ["тошнот"], suggestion: { kind: "symptom", label: "Тошнота", zone: "libido", intensity: 45 } },
   { words: ["вздут"], suggestion: { kind: "symptom", label: "Вздутие живота", zone: "libido", intensity: 42 } },
-  { words: ["болит живот", "боль в животе", "низ живота"], suggestion: { kind: "symptom", label: "Боли внизу живота", zone: "libido", intensity: 55 } },
+  { words: ["болит живот", "боль в животе", "боли в животе", "низ живота"], suggestion: { kind: "symptom", label: "Боль внизу живота", zone: "libido", intensity: 55 } },
   { words: ["выделен"], suggestion: { kind: "symptom", label: "Изменение выделений", zone: "libido", intensity: 35 } },
   { words: ["секс", "близость была"], suggestion: { kind: "action", label: "Секс" } },
   { words: ["мастурбац"], suggestion: { kind: "action", label: "Мастурбация" } },
 ];
+
+const VOICE_SYMPTOM_CATALOG: VoiceSymptom[] = [
+  { label: "Труднее сосредоточиться", zone: "cognitive", intensity: 55 }, { label: "Туман в голове", zone: "cognitive", intensity: 55 }, { label: "Забывчивость", zone: "cognitive", intensity: 48 }, { label: "Головная боль", zone: "cognitive", intensity: 52 }, { label: "Мигрень", zone: "cognitive", intensity: 70 }, { label: "Сонливость", zone: "cognitive", intensity: 42 }, { label: "Бессонница", zone: "cognitive", intensity: 54 },
+  { label: "Грусть", zone: "emotional", intensity: 48 }, { label: "Тревога", zone: "emotional", intensity: 56 }, { label: "Раздражительность", zone: "emotional", intensity: 52 }, { label: "Перепады настроения", zone: "emotional", intensity: 48 }, { label: "Апатия", zone: "emotional", intensity: 52 }, { label: "Эмоциональная чувствительность", zone: "emotional", intensity: 45 }, { label: "Напряжение после конфликта", zone: "emotional", intensity: 64 }, { label: "Радость", zone: "emotional", intensity: 56 }, { label: "Спокойствие", zone: "emotional", intensity: 48 },
+  { label: "Боль внизу живота", zone: "libido", intensity: 55 }, { label: "Спазмы внизу живота", zone: "libido", intensity: 62 }, { label: "Тошнота", zone: "libido", intensity: 45 }, { label: "Вздутие живота", zone: "libido", intensity: 42 }, { label: "Чувствительная грудь", zone: "libido", intensity: 45 }, { label: "Боль в спине", zone: "libido", intensity: 46 }, { label: "Сухость во влагалище", zone: "libido", intensity: 42 }, { label: "Снижение желания", zone: "libido", intensity: 50 }, { label: "Повышенное желание", zone: "libido", intensity: 50 },
+  { label: "Усталость", zone: "general", intensity: 45 }, { label: "Повышенный аппетит", zone: "general", intensity: 34 },
+];
+
+const normalize = (value: string) => value.toLowerCase().replace(/ё/g, "е").trim();
+const findSymptoms = (query: string) => {
+  const needle = normalize(query);
+  if (!needle) return [];
+  const words = needle.split(/\s+/).filter(Boolean);
+  return VOICE_SYMPTOM_CATALOG.filter((item) => words.every((word) => normalize(item.label).includes(word.slice(0, Math.max(3, word.length - 1))) || word.length >= 4 && word.includes(normalize(item.label).slice(0, 4))));
+};
 
 function parseDraft(transcript: string, actionLabels: string[]): VoiceDraft {
   const text = transcript.toLowerCase();
@@ -56,7 +75,11 @@ function parseDraft(transcript: string, actionLabels: string[]): VoiceDraft {
     scores[item.zone] = (scores[item.zone] ?? 0) + item.value;
     if (item.symptom && !symptoms.some((symptom) => symptom.label === item.symptom!.label)) symptoms.push(item.symptom);
   });
-  EXTRA_FROM_SPEECH.forEach((item) => { if (item.words.some((word) => text.includes(word)) && !suggestions.some((suggestion) => suggestion.label === item.suggestion.label)) suggestions.push(item.suggestion); });
+  EXTRA_FROM_SPEECH.forEach((item) => {
+    if (!item.words.some((word) => text.includes(word))) return;
+    if (!symptoms.some((symptom) => symptom.label === item.suggestion.label) && item.suggestion.kind === "symptom") symptoms.push({ label: item.suggestion.label, zone: item.suggestion.zone ?? "general", intensity: item.suggestion.intensity ?? 40 });
+    if (item.suggestion.kind === "action" && !suggestions.some((suggestion) => suggestion.label === item.suggestion.label)) suggestions.push(item.suggestion);
+  });
   const knownActions = actionLabels.filter((label) => (ACTION_ALIASES[label] ?? [label.toLowerCase()]).some((word) => text.includes(word)));
   const zones = Object.fromEntries(Object.entries(scores).filter(([, value]) => value).map(([zone, value]) => [zone, Math.max(-100, Math.min(100, value!))])) as Partial<ZoneValues>;
   return { transcript, zones, symptoms, actions: knownActions, suggestions };
@@ -90,11 +113,13 @@ export default function VoiceCheckinSheet({ actionLabels, onConfirm, onClose }: 
   useEffect(() => { const y = window.scrollY; const body = document.body; const root = document.documentElement; const previous = { position: body.style.position, top: body.style.top, width: body.style.width, overflow: body.style.overflow, rootOverflow: root.style.overflow }; body.style.position = "fixed"; body.style.top = `-${y}px`; body.style.width = "100%"; body.style.overflow = "hidden"; root.style.overflow = "hidden"; return () => { recognition.current?.stop(); body.style.position = previous.position; body.style.top = previous.top; body.style.width = previous.width; body.style.overflow = previous.overflow; root.style.overflow = previous.rootOverflow; window.scrollTo(0, y); }; }, []);
 
   const symptoms = draft.symptoms;
+  const symptomMatches = useMemo(() => findSymptoms(customSymptom), [customSymptom]);
+  const symptomExists = symptomMatches.some((item) => normalize(item.label) === normalize(customSymptom));
   const zoneRows = useMemo(() => Object.entries(draft.zones) as Array<[ZoneKey, number]>, [draft.zones]);
   function setZone(zone: ZoneKey, value: number) { setDraft((current) => ({ ...current, zones: { ...current.zones, [zone]: value } })); }
   function removeSymptom(label: string) { setDraft((current) => ({ ...current, symptoms: current.symptoms.filter((symptom) => symptom.label !== label) })); }
   function toggleAction(label: string) { setDraft((current) => ({ ...current, actions: current.actions.includes(label) ? current.actions.filter((item) => item !== label) : [...current.actions, label] })); }
-  function addCustom() { const label = customSymptom.trim(); if (!label) return; setDraft((current) => ({ ...current, symptoms: [...current.symptoms, { label, zone: "general", intensity: 40 }] })); setCustomSymptom(""); }
+  function addCustom(symptom?: VoiceSymptom) { const entry = symptom ?? { label: customSymptom.trim(), zone: "general" as const, intensity: 40 }; if (!entry.label) return; setDraft((current) => current.symptoms.some((item) => normalize(item.label) === normalize(entry.label)) ? current : ({ ...current, symptoms: [...current.symptoms, entry] })); setCustomSymptom(""); }
   function toggleSuggestion(label: string) { setAcceptedSuggestions((current) => current.includes(label) ? current.filter((item) => item !== label) : [...current, label]); }
   function confirmDraft() {
     const accepted = draft.suggestions.filter((item) => acceptedSuggestions.includes(item.label));
@@ -114,12 +139,13 @@ export default function VoiceCheckinSheet({ actionLabels, onConfirm, onClose }: 
         <button className="voice-finish" type="button" onClick={() => { recognition.current?.stop(); buildDraft(); }}>Закончить и разобрать</button>
       </> : <>
         <p className="voice-source">«{draft.transcript || "Заметка не распознана — можно добавить отметки вручную."}»</p>
-        <p className="voice-section-label">Состояния</p>
+        <p className="voice-section-label">Нагрузки и либидо</p>
         <div className="voice-zone-list">{zoneRows.length ? zoneRows.map(([zone, value]) => <article key={zone} style={{ "--voice-color": ZONE_META[zone].color } as CSSProperties}><div><span>{ZONE_META[zone].label}</span><b>{value > 0 ? "+" : ""}{value} · {feelingLabel(value)}</b></div><input type="range" min="-100" max="100" value={value} onChange={(event) => setZone(zone, Number(event.target.value))} /><button type="button" onClick={() => setDraft((current) => { const zones = { ...current.zones }; delete zones[zone]; return { ...current, zones }; })}>×</button></article>) : <p className="voice-empty">Не нашла уверенной оценки — можно оставить так или отметить через силуэт.</p>}</div>
         <p className="voice-section-label">Симптомы и ощущения</p>
         <div className="voice-symptoms">{symptoms.map((symptom) => <button key={symptom.label} style={{ "--voice-color": ZONE_META[symptom.zone as ZoneKey]?.color ?? "#b48cff" } as CSSProperties} type="button" onClick={() => removeSymptom(symptom.label)}><i>✓</i>{symptom.label}<b>×</b></button>)}</div>
         {draft.suggestions.some((item) => item.kind === "symptom") && <div className="voice-proposals"><span>Из рассказа — подтвердить при необходимости</span>{draft.suggestions.filter((item) => item.kind === "symptom").map((item) => <button className={acceptedSuggestions.includes(item.label) ? "is-selected" : ""} type="button" key={item.label} onClick={() => toggleSuggestion(item.label)}><i>{acceptedSuggestions.includes(item.label) ? "✓" : "＋"}</i>{item.label}</button>)}</div>}
-        <div className="voice-custom"><input value={customSymptom} onChange={(event) => setCustomSymptom(event.target.value)} placeholder="Добавить своё ощущение" /><button type="button" onClick={addCustom}>＋</button></div>
+        <div className="voice-custom"><span>⌕</span><input value={customSymptom} onChange={(event) => setCustomSymptom(event.target.value)} placeholder="Найти или добавить симптом" /></div>
+        {customSymptom.trim() && <div className="voice-symptom-search">{symptomMatches.length ? <>{symptomMatches.map((symptom) => <button type="button" key={symptom.label} onClick={() => addCustom(symptom)}><i>＋</i>{symptom.label}</button>)}</> : <button className="voice-add-new" type="button" onClick={() => addCustom()}>＋ Добавить «{customSymptom.trim()}»</button>}{!symptomExists && symptomMatches.length > 0 && <button className="voice-add-new" type="button" onClick={() => addCustom()}>＋ Добавить «{customSymptom.trim()}»</button>}</div>}
         <p className="voice-section-label">Действия</p>
         <div className="voice-actions">{actionLabels.map((label) => <button key={label} className={draft.actions.includes(label) ? "is-selected" : ""} type="button" onClick={() => toggleAction(label)}><i>{draft.actions.includes(label) ? "✓" : "＋"}</i>{label}</button>)}</div>
         {draft.suggestions.some((item) => item.kind === "action") && <div className="voice-proposals voice-action-proposals"><span>Новые действия из рассказа</span>{draft.suggestions.filter((item) => item.kind === "action").map((item) => <button className={acceptedSuggestions.includes(item.label) ? "is-selected" : ""} type="button" key={item.label} onClick={() => toggleSuggestion(item.label)}><i>{acceptedSuggestions.includes(item.label) ? "✓" : "＋"}</i>{item.label}</button>)}</div>}
