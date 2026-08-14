@@ -7,7 +7,7 @@ import EnvironmentPanel, { ContextStrip } from "../components/environment-panel"
 import { ConnectionsSheet, CycleSettingsSheet, DaySheet } from "../components/sheets";
 import SymptomCheck from "../components/symptom-check";
 import WaveChart from "../components/wave-chart";
-import type { AlmaProfile, ContextKey, EnvironmentPayload, SymptomEntry, SyncMode, ZoneKey, ZoneValues } from "../lib/alma";
+import type { AlmaProfile, ContextKey, EnvironmentPayload, SymptomEntry, SyncMode, WaveLayerKey, ZoneKey, ZoneValues } from "../lib/alma";
 import { DEFAULT_SYMPTOMS, TIMELINE_RADIUS, ZONE_META, addDays, buildDayModels, defaultProfile, defaultState, formatShortDate, phaseLabel, relativeDayLabel, todayIso } from "../lib/alma";
 import { bootstrapCloud, saveCloudEnvironment, saveCloudProfile, saveCloudState, saveCloudSymptom } from "../lib/supabase";
 
@@ -70,9 +70,9 @@ export default function AlmaPrototype() {
   const [symptomsByDate, setSymptomsByDate] = useState<Record<string, SymptomEntry[]>>(() => ({ [currentIso]: cloneSuggestions() }));
   const [activeIndex, setActiveIndex] = useState(TODAY_INDEX);
   const [activeZone, setActiveZone] = useState<ZoneKey | null>(null);
-  const [activeContexts, setActiveContexts] = useState<Set<ContextKey>>(() => new Set(["cycle", "pressure"]));
+  const [activeContexts, setActiveContexts] = useState<Set<ContextKey>>(() => new Set());
   const [internalWaves, setInternalWaves] = useState<Set<ZoneKey>>(() => new Set());
-  const [wavePickerOpen, setWavePickerOpen] = useState(false);
+  const [activeLayers, setActiveLayers] = useState<Set<WaveLayerKey>>(() => new Set(["internal"]));
   const [environment, setEnvironment] = useState<EnvironmentPayload | null>(null);
   const [environmentLoading, setEnvironmentLoading] = useState(true);
   const [environmentError, setEnvironmentError] = useState<string | null>(null);
@@ -189,6 +189,14 @@ export default function AlmaPrototype() {
     });
   }
 
+  function toggleLayer(key: WaveLayerKey) {
+    setActiveLayers((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  }
+
   function selectDay(index: number) {
     setActiveIndex(Math.max(0, Math.min(days.length - 1, index)));
   }
@@ -253,17 +261,11 @@ export default function AlmaPrototype() {
       <section className="wave-section" aria-labelledby="wave-title">
         <header className="wave-section-header">
           <div><p className="eyebrow">{relativeDayLabel(activeDay.iso)} · {formatShortDate(activeDay.iso)}</p><h2 id="wave-title">Субъективная волна</h2></div>
-          <button className="wave-picker-trigger" type="button" aria-expanded={wavePickerOpen} onClick={() => setWavePickerOpen(!wavePickerOpen)}><i>≋</i>волны</button>
         </header>
-        {wavePickerOpen && <div className="wave-picker" role="menu">
-          <p>Внутренние волны поверх общей</p>
-          {(Object.keys(ZONE_META) as ZoneKey[]).map((zone) => <button key={zone} type="button" className={internalWaves.has(zone) ? "is-active" : ""} onClick={() => toggleInternalWave(zone)}><i style={{ background: ZONE_META[zone].color }} />{ZONE_META[zone].label}<b>{internalWaves.has(zone) ? "✓" : "+"}</b></button>)}
-          <small>Формула общей волны в прототипе предварительная; внешние среды в неё не входят.</small>
-        </div>}
-        <WaveChart days={days} activeIndex={activeIndex} activeContexts={activeContexts} internalWaves={internalWaves} environment={environment} confirmedCount={confirmedCount} onSelectDay={selectDay} onOpenDay={openDay} />
+        <WaveChart days={days} activeIndex={activeIndex} activeContexts={activeContexts} internalWaves={internalWaves} activeLayers={activeLayers} environment={environment} deviceSignals={null} confirmedCount={confirmedCount} onSelectDay={selectDay} onOpenDay={openDay} />
       </section>
 
-      <ContextStrip environment={environment} activeContexts={activeContexts} onToggle={toggleContext} />
+      <ContextStrip environment={environment} activeContexts={activeContexts} internalWaves={internalWaves} activeLayers={activeLayers} onToggleContext={toggleContext} onToggleInternal={toggleInternalWave} onToggleLayer={toggleLayer} />
 
       <article className={`insight-card insight-${insight.tone}`}>
         <div className="insight-symbol">✦</div><div><p className="eyebrow">{insight.kicker}</p><h2>{insight.title}</h2><p>{insight.body}</p></div>
@@ -271,7 +273,7 @@ export default function AlmaPrototype() {
 
       {!activeDay.isForecast ? <>
         <SymptomCheck symptoms={activeSymptoms} onUpdate={updateSymptom} onAdd={addSymptom} />
-        <BodyCheckin values={activeDay.zones} activeZone={activeZone} onSelect={setActiveZone} onChange={changeZone} onCommit={commitState} />
+        <BodyCheckin values={activeDay.zones} activeZone={activeZone} onSelect={setActiveZone} onChange={changeZone} onCommit={commitState} onAddQuickSymptom={addSymptom} />
       </> : <section className="forecast-card glass-card"><span>∿</span><div><p className="eyebrow">без ввода в будущее</p><h2>Это вероятный фон</h2><p>Состояние можно уточнить только для наступившего дня. Прогноз остаётся бледным и не смешивается с фактом.</p></div></section>}
 
       <EnvironmentPanel environment={environment} loading={environmentLoading} error={environmentError} onReload={() => setReloadEnvironment((value) => value + 1)} onLocation={setLocation} />
@@ -285,7 +287,7 @@ export default function AlmaPrototype() {
     </div>
 
     {cycleSettingsOpen && <CycleSettingsSheet profile={profile} activeIso={activeDay.iso} onSave={saveProfile} onClose={() => setCycleSettingsOpen(false)} />}
-    {daySheetOpen && <DaySheet day={activeDay} environment={environment} symptoms={activeSymptoms} onClose={() => setDaySheetOpen(false)} />}
-    {connectionsOpen && <ConnectionsSheet day={activeDay} environment={environment} onClose={() => setConnectionsOpen(false)} />}
+    {daySheetOpen && <DaySheet day={activeDay} environment={environment} symptoms={activeSymptoms} activeContexts={activeContexts} internalWaves={internalWaves} activeLayers={activeLayers} deviceSignals={null} onClose={() => setDaySheetOpen(false)} />}
+    {connectionsOpen && <ConnectionsSheet day={activeDay} days={days} environment={environment} onClose={() => setConnectionsOpen(false)} />}
   </main>;
 }
