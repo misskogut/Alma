@@ -478,9 +478,22 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 1px solid 
 }
 @keyframes symptom-float { from { transform: translateY(0); } to { transform: translateY(-5px); } }
 
+/* Cycle is a self-contained scene, like the check-in card below it. */
+.cycle-hero {
+  min-height: 634px;
+  margin: 5px 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--cycle-color) 19%, rgba(255,255,255,.06));
+  border-radius: 23px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.025), 0 12px 28px rgba(0,0,0,.2);
+}
+.cycle-quick-access {
+  bottom: 27px;
+  max-width: 306px;
+}
+
 @media (min-width: 700px) {
   .phone-scene { margin: 24px auto; min-height: calc(100svh - 48px); border: 1px solid rgba(255, 255, 255, .055); border-radius: 34px; }
-  .cycle-hero { border-radius: 0; }
+  .cycle-hero { border-radius: 23px; }
 }
 
 @media (max-width: 359px) {
