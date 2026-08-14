@@ -140,7 +140,7 @@ export function CycleSettingsSheet({
   selectedActionLabels: string[];
   onSave: (profile: AlmaProfile, focusIso?: string) => void;
   onToggleQuickAction: (action: QuickAction) => void;
-  onUpdateQuickActions: (actions: string[]) => void;
+  onUpdateQuickActions: (actions: string[], actionCatalog?: string[]) => void;
   onClose: () => void;
 }) {
   const currentIso = todayIso();
@@ -160,7 +160,8 @@ export function CycleSettingsSheet({
   const currentMonth = firstOfMonth(currentIso);
   const quickActionLabels = profile.quickActions ?? DEFAULT_QUICK_ACTIONS.map((action) => action.label);
   const quickActions = quickActionLabels.map(quickActionFor);
-  const catalogActions = ALL_QUICK_ACTIONS.filter((action) => !quickActionLabels.includes(action.label));
+  const allActionLabels = Array.from(new Set([...ALL_QUICK_ACTIONS.map((action) => action.label), ...(profile.actionCatalog ?? [])]));
+  const catalogActions = allActionLabels.filter((label) => !quickActionLabels.includes(label)).map(quickActionFor);
   // Configuration and the day's markers are separate: only an action that is
   // still in the working set can be presented as selected in this compact UI.
   const selectedWorkingActionLabels = selectedActionLabels.filter((label) => quickActionLabels.includes(label));
@@ -168,7 +169,10 @@ export function CycleSettingsSheet({
   function addQuickAction(label: string) {
     const normalized = label.trim().replace(/\s+/g, " ");
     if (!normalized || quickActionLabels.includes(normalized)) return;
-    onUpdateQuickActions([...quickActionLabels, normalized]);
+    const nextCatalog = ALL_QUICK_ACTIONS.some((action) => action.label === normalized) || profile.actionCatalog?.includes(normalized)
+      ? profile.actionCatalog
+      : [...(profile.actionCatalog ?? []), normalized];
+    onUpdateQuickActions([...quickActionLabels, normalized], nextCatalog);
     setCustomAction("");
   }
 
@@ -185,6 +189,7 @@ export function CycleSettingsSheet({
 
   function beginDrag(event: ReactPointerEvent<HTMLElement>, label: string) {
     if (!actionsOpen) return;
+    event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
     dragStart.current = { x: event.clientX, y: event.clientY, label };
     didDrag.current = false;
@@ -200,12 +205,15 @@ export function CycleSettingsSheet({
   }
 
   function finishDrag(event: ReactPointerEvent<HTMLElement>) {
+    if (!dragStart.current) return;
     const label = draggedAction;
     const target = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>("[data-quick-zone]")?.dataset.quickZone;
+    const actionTarget = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>("[data-quick-action]")?.dataset.quickAction;
     if (label && target) {
       const isActive = quickActionLabels.includes(label);
       if (target === "active" && !isActive) onUpdateQuickActions([...quickActionLabels, label]);
       if (target === "catalog" && isActive) onUpdateQuickActions(quickActionLabels.filter((item) => item !== label));
+      if (target === "active" && isActive && actionTarget && actionTarget !== label) moveQuickAction(label, actionTarget);
     }
     dragStart.current = null;
     suppressNextTap.current = didDrag.current;
@@ -239,12 +247,13 @@ export function CycleSettingsSheet({
         <div className="quick-actions-heading"><div><p className="eyebrow">быстрая отметка</p><strong>Что было сегодня?</strong><small>{actionsOpen ? "Удержи и перетяни действие между наборами." : "Нажми, чтобы отметить действие сегодня."}</small></div><span>{selectedWorkingActionLabels.length ? `${selectedWorkingActionLabels.length} выбрано` : "по желанию"}</span></div>
         <div className={`quick-actions-grid quick-actions-active${actionsOpen ? " is-editing" : ""}`} data-quick-zone="active">
           {quickActions.map((action) => <div className={`quick-action-card${draggedAction === action.label ? " is-dragging" : ""}`} data-quick-action={action.label} key={action.label}>
-            <button className="quick-action-main" type="button" aria-pressed={selectedWorkingActionLabels.includes(action.label)} onClick={() => { if (suppressNextTap.current) { suppressNextTap.current = false; return; } onToggleQuickAction(action); }} onPointerDown={(event) => beginDrag(event, action.label)} onPointerMove={continueDrag} onPointerUp={finishDrag} onPointerCancel={() => { dragStart.current = null; setDraggedAction(null); }}><i>{action.icon}</i><span>{action.label}</span></button>
+            <button className="quick-action-main" type="button" aria-pressed={selectedWorkingActionLabels.includes(action.label)} onClick={() => { if (actionsOpen || suppressNextTap.current) { suppressNextTap.current = false; return; } onToggleQuickAction(action); }} onPointerDown={(event) => beginDrag(event, action.label)} onPointerMove={continueDrag} onPointerUp={finishDrag} onPointerCancel={() => { dragStart.current = null; setDraggedAction(null); }}><i>{action.icon}</i><span>{action.label}</span></button>
+            {actionsOpen && <button className="quick-action-remove" type="button" aria-label={`Убрать ${action.label} из быстрого набора`} onClick={() => onUpdateQuickActions(quickActionLabels.filter((item) => item !== action.label))}>×</button>}
           </div>)}
           {!quickActions.length && <p className="quick-actions-empty">Добавь действия из каталога ниже.</p>}
         </div>
         <button type="button" className={`quick-actions-more${actionsOpen ? " is-open" : ""}`} onClick={() => setActionsOpen((value) => !value)}>{actionsOpen ? "Скрыть каталог" : "＋ добавить"}</button>
-        {actionsOpen && <div className="quick-actions-extra quick-actions-catalog" data-quick-zone="catalog"><p className="quick-actions-catalog-intro">Перетаскивай сюда, чтобы убрать из быстрого набора; тап — добавить наверх.</p>{(["Бережный ритм", "Тело и контекст"] as const).map((group) => <section key={group}><p>{group}</p><div>{catalogActions.filter((action) => action.group === group).map((action) => <button key={action.label} type="button" onClick={() => { if (suppressNextTap.current) { suppressNextTap.current = false; return; } addQuickAction(action.label); }} onPointerDown={(event) => beginDrag(event, action.label)} onPointerMove={continueDrag} onPointerUp={finishDrag} onPointerCancel={() => { dragStart.current = null; setDraggedAction(null); }}><i>{action.icon}</i><span>{action.label}</span><b>＋</b></button>)}</div></section>)}<form className="quick-action-custom" onSubmit={(event) => { event.preventDefault(); addQuickAction(customAction); }}><input value={customAction} onChange={(event) => setCustomAction(event.target.value)} placeholder="Своё действие" maxLength={48} /><button type="submit" disabled={!customAction.trim()}>добавить</button></form></div>}
+        {actionsOpen && <div className="quick-actions-extra quick-actions-catalog" data-quick-zone="catalog"><p className="quick-actions-catalog-intro">Нажми ＋, чтобы вернуть действие наверх. Удерживай рабочую кнопку и перетаскивай её для нового порядка.</p>{(["Бережный ритм", "Тело и контекст"] as const).map((group) => <section key={group}><p>{group}</p><div>{catalogActions.filter((action) => action.group === group).map((action) => <button key={action.label} type="button" onClick={() => addQuickAction(action.label)}><i>{action.icon}</i><span>{action.label}</span><b>＋</b></button>)}</div></section>)}<form className="quick-action-custom" onSubmit={(event) => { event.preventDefault(); addQuickAction(customAction); }}><input value={customAction} onChange={(event) => setCustomAction(event.target.value)} placeholder="Своё действие" maxLength={48} /><button type="submit" disabled={!customAction.trim()}>добавить</button></form></div>}
       </section>
 
       <button className={`period-expand-trigger${periodFormOpen ? " is-open" : ""}`} type="button" aria-expanded={periodFormOpen} onClick={() => setPeriodFormOpen((value) => !value)}><span><i>●</i><b>{periodFormOpen ? "Отметка месячных" : "Отметить месячные"}</b><small>{periodFormOpen ? "выбери первый день и длительность" : "откроется календарь и выбор дней"}</small></span><em>{periodFormOpen ? "−" : "＋"}</em></button>
