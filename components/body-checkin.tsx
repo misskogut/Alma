@@ -6,7 +6,7 @@ import { bodySilhouetteAsset } from "../lib/visual-assets";
 import { controlAssets } from "../lib/control-assets";
 
 type ActiveControl = "cognitive" | "emotional" | "libido";
-type Props = { values: ZoneValues; symptoms: SymptomEntry[]; symptomHistory: SymptomEntry[]; activeZone: ZoneKey | null; onSelect: (zone: ZoneKey) => void; onBeginAdjustment: (zone: ZoneKey) => void; onChange: (zone: ZoneKey, value: number) => void; onCommit: () => void; onAddQuickSymptom: (symptom: SymptomEntry) => void; };
+type Props = { values: ZoneValues; symptoms: SymptomEntry[]; symptomHistory: SymptomEntry[]; activeZone: ZoneKey | null; onSelect: (zone: ZoneKey) => void; onBeginAdjustment: (zone: ZoneKey) => void; onChange: (zone: ZoneKey, value: number) => void; onCommit: () => void; onAddQuickSymptom: (symptom: SymptomEntry) => void; onUpdateQuickSymptom: (symptom: SymptomEntry) => void; };
 
 const zones: ActiveControl[] = ["cognitive", "emotional", "libido"];
 type Band = "negativeLight" | "negativeMedium" | "negativeHigh" | "positiveLight" | "positiveMedium" | "positiveHigh";
@@ -71,7 +71,7 @@ const describeRange = (value: number) => {
 };
 const getBand = (value: number): Band => value <= -67 ? "negativeHigh" : value <= -34 ? "negativeMedium" : value < 0 ? "negativeLight" : value <= 33 ? "positiveLight" : value <= 66 ? "positiveMedium" : "positiveHigh";
 
-export default function BodyCheckin({ values, symptoms: confirmedSymptoms, symptomHistory, activeZone: _activeZone, onSelect, onBeginAdjustment, onChange, onCommit, onAddQuickSymptom }: Props) {
+export default function BodyCheckin({ values, symptoms: confirmedSymptoms, symptomHistory, activeZone: _activeZone, onSelect, onBeginAdjustment, onChange, onCommit, onAddQuickSymptom, onUpdateQuickSymptom }: Props) {
   const [openControl, setOpenControl] = useState<ActiveControl | null>(null);
   const [holding, setHolding] = useState(false);
   const [detailZone, setDetailZone] = useState<ActiveControl | null>(null);
@@ -181,7 +181,11 @@ export default function BodyCheckin({ values, symptoms: confirmedSymptoms, sympt
   const symptomSide = value < 0 ? "right" : "left";
   const chooseSymptom = (label: string, index: number) => {
     if (!openControl) return;
-    if (confirmedSymptoms.some((symptom) => symptom.zone === openControl && symptom.status === "confirmed" && symptom.label === label)) return;
+    const existing = confirmedSymptoms.find((symptom) => symptom.zone === openControl && symptom.label === label);
+    if (existing) {
+      onUpdateQuickSymptom({ ...existing, status: existing.status === "confirmed" ? "dismissed" : "confirmed", intensity: Math.abs(value) });
+      return;
+    }
     onAddQuickSymptom({ id: `quick-${openControl}-${Date.now()}-${index}`, label, zone: openControl, status: "confirmed", intensity: Math.abs(value), suggestedBy: "system" });
   };
   const submitCustom = () => {
