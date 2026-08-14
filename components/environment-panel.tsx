@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import type { CSSProperties } from "react";
-import type { ContextKey, EnvironmentPayload } from "../lib/alma";
-import { CONTEXT_META, pressureMmHg, weatherLabel } from "../lib/alma";
+import type { ContextKey, EnvironmentPayload, WaveLayerKey, ZoneKey } from "../lib/alma";
+import { CONTEXT_META, pressureMmHg, weatherLabel, ZONE_META } from "../lib/alma";
 
 function valueOrDash(value: number | null | undefined, suffix = "") {
   return value == null ? "—" : `${Math.round(value)}${suffix}`;
@@ -77,14 +77,33 @@ export default function EnvironmentPanel({
   </section>;
 }
 
-export function ContextStrip({ environment, activeContexts, onToggle }: { environment: EnvironmentPayload | null; activeContexts: Set<ContextKey>; onToggle: (key: ContextKey) => void }) {
+export function ContextStrip({ environment, activeContexts, internalWaves, activeLayers, onToggleContext, onToggleInternal, onToggleLayer }: {
+  environment: EnvironmentPayload | null; activeContexts: Set<ContextKey>; internalWaves: Set<ZoneKey>; activeLayers: Set<WaveLayerKey>;
+  onToggleContext: (key: ContextKey) => void; onToggleInternal: (key: ZoneKey) => void; onToggleLayer: (key: WaveLayerKey) => void;
+}) {
+  const naturalKeys = new Set<ContextKey>(["temperature", "pressure", "humidity", "geomagnetic", "daylight"]);
+  const groups: Array<{ id: WaveLayerKey; title: string; color: string; items: Array<{ kind: "internal"; key: ZoneKey } | { kind: "context"; key: ContextKey }> }> = [
+    { id: "internal", title: "Внутренняя среда", color: "#d55dff", items: [{ kind: "internal", key: "cognitive" }, { kind: "internal", key: "emotional" }, { kind: "internal", key: "libido" }, { kind: "internal", key: "social" }] },
+    { id: "external", title: "Внешняя среда", color: "#65d6ef", items: [{ kind: "context", key: "temperature" }, { kind: "context", key: "pressure" }, { kind: "context", key: "humidity" }, { kind: "context", key: "geomagnetic" }, { kind: "context", key: "daylight" }] },
+  ];
   return <div className="context-strip-wrap">
-    <div className="context-scroller" aria-label="Слои контекста">
-      {(Object.keys(CONTEXT_META) as ContextKey[]).map((key) => {
-        const unavailable = key !== "cycle" && !environment;
-        return <button key={key} type="button" disabled={unavailable} className={`context-chip${activeContexts.has(key) ? " is-active" : ""}`} style={{ "--chip-color": CONTEXT_META[key].color } as CSSProperties} onClick={() => onToggle(key)} aria-pressed={activeContexts.has(key)}><i />{CONTEXT_META[key].label}</button>;
-      })}
+    <div className="metric-groups" aria-label="Слои волн">
+      {groups.map((group) => <section key={group.id} className="metric-group" style={{ "--group-color": group.color } as CSSProperties}>
+        <p>{group.title}</p>
+        <div className="context-scroller">
+          <button type="button" className={`context-chip aggregate-chip${activeLayers.has(group.id) ? " is-active" : ""}`} style={{ "--chip-color": group.color } as CSSProperties} onClick={() => onToggleLayer(group.id)} aria-pressed={activeLayers.has(group.id)}><i />Средняя</button>
+          {group.items.map((item) => {
+            if (item.kind === "internal") {
+              const key = item.key;
+              return <button key={key} type="button" className={`context-chip${internalWaves.has(key) ? " is-active" : ""}`} style={{ "--chip-color": ZONE_META[key].color } as CSSProperties} onClick={() => onToggleInternal(key)} aria-pressed={internalWaves.has(key)}><i />{ZONE_META[key].label}</button>;
+            }
+            const key = item.key;
+            const unavailable = naturalKeys.has(key) && !environment;
+            return <button key={key} type="button" disabled={unavailable} className={`context-chip${activeContexts.has(key) ? " is-active" : ""}`} style={{ "--chip-color": CONTEXT_META[key].color } as CSSProperties} onClick={() => onToggleContext(key)} aria-pressed={activeContexts.has(key)}><i />{CONTEXT_META[key].label}</button>;
+          })}
+        </div>
+      </section>)}
     </div>
-    <p className="context-explainer">Среды накладываются как контекст и не формируют субъективную волну.</p>
+    <p className="context-explainer">Яркая «Средняя» — слой целиком. Отдельные метрики накладываются поверх неё точками или пунктиром.</p>
   </div>;
 }
