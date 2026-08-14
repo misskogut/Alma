@@ -11,7 +11,7 @@ type Props = { values: ZoneValues; symptoms: SymptomEntry[]; symptomHistory: Sym
 const zones: ActiveControl[] = ["cognitive", "emotional", "libido"];
 type Band = "negativeLight" | "negativeMedium" | "negativeHigh" | "positiveLight" | "positiveMedium" | "positiveHigh";
 type SuggestionSet = { primary: string[]; more: string[] };
-type CatalogGroup = { title: string; labels: string[] };
+type CatalogGroup = { title: string; negative: string[]; positive: string[] };
 const suggested: Record<ActiveControl, Record<Band, SuggestionSet>> = {
   cognitive: {
     negativeLight: { primary: ["Легче отвлекаться", "Нужен более медленный старт", "Небольшая ментальная усталость"], more: ["Сложнее переключаться", "Меньше интереса к задачам", "Хочется паузы", "Замедленный темп", "Труднее собраться"] },
@@ -40,17 +40,17 @@ const suggested: Record<ActiveControl, Record<Band, SuggestionSet>> = {
 };
 const extraCatalog: Record<ActiveControl, CatalogGroup[]> = {
   cognitive: [
-    { title: "Голова и ясность", labels: ["Головная боль", "Мигрень", "Ощущение тяжести в голове", "Чувствительность к шуму", "Трудно подобрать слова", "Снижение памяти"] },
-    { title: "Сон и восстановление", labels: ["Сонливость", "Бессонница", "Неспокойный сон", "Раннее пробуждение", "Нужен дневной отдых"] },
+    { title: "Голова и ясность", negative: ["Головная боль", "Мигрень", "Ощущение тяжести в голове", "Чувствительность к шуму", "Трудно подобрать слова", "Снижение памяти"], positive: ["Бодрость", "Лёгкость в голове", "Свежесть после сна", "Легко держать внимание"] },
+    { title: "Сон и восстановление", negative: ["Сонливость", "Бессонница", "Неспокойный сон", "Раннее пробуждение", "Нужен дневной отдых"], positive: ["Восстановленный сон", "Хорошо выспалась", "Есть запас сил"] },
   ],
   emotional: [
-    { title: "Настроение", labels: ["Спокойствие", "Радость", "Много энергии", "Игривость", "Перепады настроения", "Грусть", "Тревога", "Апатия", "Растерянность", "Подавленность"] },
-    { title: "Напряжение и отношение к себе", labels: ["Стресс", "Чувство вины", "Навязчивые мысли", "Жёсткая самокритика", "Ощущение одиночества", "Хочется поддержки", "Раздражение"] },
+    { title: "Настроение", negative: ["Перепады настроения", "Грусть", "Тревога", "Апатия", "Растерянность", "Подавленность"], positive: ["Спокойствие", "Радость", "Много энергии", "Игривость", "Воодушевление", "Уверенность"] },
+    { title: "Напряжение и отношение к себе", negative: ["Стресс", "Чувство вины", "Навязчивые мысли", "Жёсткая самокритика", "Ощущение одиночества", "Хочется поддержки", "Раздражение"], positive: ["Принятие себя", "Эмоциональная лёгкость", "Чувство опоры", "Тепло к себе"] },
   ],
   libido: [
-    { title: "Низ живота и тело", labels: ["Боль внизу живота", "Спазмы внизу живота", "Чувствительная грудь", "Боль в спине", "Вздутие живота", "Тошнота", "Запор", "Диарея", "Повышенный аппетит", "Прыщи", "Приливы жара", "Ночная потливость", "Боль в суставах"] },
-    { title: "Интимный телесный фон", labels: ["Сухость во влагалище", "Зуд во влагалище", "Выделений нет", "Кремообразные выделения", "Водянистые выделения", "Липкие выделения", "Слизистые выделения", "Кровомажущие выделения", "Нетипичные выделения"] },
-    { title: "Близость и желание", labels: ["Слабое желание", "Среднее желание", "Сильное желание", "Интимные прикосновения", "Мастурбация", "Оргазм", "Секс с защитой", "Секс без защиты", "Оральный секс", "Анальный секс"] },
+    { title: "Низ живота и тело", negative: ["Боль внизу живота", "Спазмы внизу живота", "Чувствительная грудь", "Боль в спине", "Вздутие живота", "Тошнота", "Запор", "Диарея", "Повышенный аппетит", "Прыщи", "Приливы жара", "Ночная потливость", "Боль в суставах"], positive: ["Телесный комфорт", "Лёгкость в теле", "Приятное тепло внизу живота"] },
+    { title: "Интимный телесный фон", negative: ["Сухость во влагалище", "Зуд во влагалище", "Выделений нет", "Кровомажущие выделения", "Нетипичные выделения"], positive: ["Кремообразные выделения", "Водянистые выделения", "Липкие выделения", "Слизистые выделения", "Телесная отзывчивость"] },
+    { title: "Близость и желание", negative: ["Слабое желание", "Не хочется секса", "Не хочется прикосновений", "Нужна дистанция"], positive: ["Среднее желание", "Сильное желание", "Интимные прикосновения", "Мастурбация", "Оргазм", "Секс с защитой", "Секс без защиты", "Оральный секс", "Анальный секс"] },
   ],
 };
 const symptomPositions: Record<ActiveControl, Record<"left" | "right", Array<[number, number]>>> = {
@@ -169,11 +169,14 @@ export default function BodyCheckin({ values, symptoms: confirmedSymptoms, sympt
   const rankedSymptoms = candidateSet ? rankSymptoms([...candidateSet.primary, ...candidateSet.more]) : [];
   const symptoms = rankedSymptoms.slice(0, 3);
   const currentLabels = candidateSet ? unique([...candidateSet.primary, ...candidateSet.more]) : [];
-  const allRangeLabels = openControl ? unique(Object.values(suggested[openControl]).flatMap((set) => [...set.primary, ...set.more])) : [];
+  const direction = value < 0 ? "negative" : "positive";
+  const allRangeLabels = openControl ? unique(Object.entries(suggested[openControl])
+    .filter(([band]) => band.startsWith(direction))
+    .flatMap(([, set]) => [...set.primary, ...set.more])) : [];
   const catalogGroups = openControl && candidateSet ? [
     { title: "Этот диапазон", labels: rankSymptoms(currentLabels) },
-    { title: "Другие ощущения этой зоны", labels: rankSymptoms(allRangeLabels.filter((label) => !currentLabels.includes(label))) },
-    ...extraCatalog[openControl].map((group) => ({ ...group, labels: rankSymptoms(group.labels) })),
+    { title: "Другие варианты этой стороны", labels: rankSymptoms(allRangeLabels.filter((label) => !currentLabels.includes(label))) },
+    ...extraCatalog[openControl].map((group) => ({ title: group.title, labels: rankSymptoms(group[direction]) })),
   ].filter((group) => group.labels.length) : [];
   const symptomSide = value < 0 ? "right" : "left";
   const chooseSymptom = (label: string, index: number) => {
@@ -227,7 +230,7 @@ export default function BodyCheckin({ values, symptoms: confirmedSymptoms, sympt
       {moreOpen && openControl && !detailZone && <aside className="more-symptoms-panel" style={{ "--zone-color": ZONE_META[openControl].color } as CSSProperties} onPointerDown={(event) => event.stopPropagation()}>
         <button className="more-close" type="button" aria-label="Закрыть дополнительные ощущения" onClick={() => setMoreOpen(false)}>×</button>
         <p className="eyebrow">полный список этой зоны</p><strong>{ZONE_META[openControl].label} · {describeRange(value)}</strong>
-        <small>Верхние подсказки — предположение для выбранного диапазона. Здесь можно отметить любое подходящее ощущение этой зоны; частые личные выборы со временем поднимаются выше.</small>
+        <small>Верхние подсказки — предположение для выбранного диапазона. Здесь — только {direction === "negative" ? "негативные" : "позитивные"} ощущения выбранной стороны; частые личные выборы со временем поднимаются выше.</small>
         {catalogGroups.map((group, groupIndex) => <section className="more-symptom-group" key={group.title}><p>{group.title}</p><div className="more-symptom-list">{group.labels.map((label, index) => { const selected = confirmedSymptoms.some((symptom) => symptom.zone === openControl && symptom.status === "confirmed" && symptom.label === label); return <button className={selected ? "is-selected" : ""} key={label} type="button" onClick={() => chooseSymptom(label, groupIndex * 100 + index + 10)}>{label}</button>; })}</div></section>)}
         <form className="more-custom-entry" onSubmit={(event) => { event.preventDefault(); submitCustom(); }}><input value={customText} onChange={(event) => setCustomText(event.target.value)} placeholder="Добавить своё ощущение" /><button type="submit">Добавить</button></form>
       </aside>}
