@@ -51,9 +51,9 @@ export function DaySheet({ day, environment, symptoms, activeContexts, internalW
   ];
   const visibleExternal = externalRows.filter((row) => activeContexts.has(row.key));
   const visibleBehavior = (["screenTime", "nightPhone", "movement", "phoneActivity"] as ContextKey[]).filter((key) => activeContexts.has(key));
-  const allContextReport = external ? `Во внешней среде: ${external.temperatureC == null ? "температура уточняется" : `${Math.round(external.temperatureC)}°`}, ${external.pressureHpa == null ? "давление уточняется" : `${pressureMmHg(external.pressureHpa)} мм`}, влажность ${external.humidityPct == null ? "уточняется" : `${Math.round(external.humidityPct)}%`}.` : "Внешние данные ещё загружаются; внутреннее состояние остаётся отдельной волной.";
+  const allContextReport = external ? `Сегодня рядом был такой фон: ${external.temperatureC == null ? "температура уточняется" : `${Math.round(external.temperatureC)}°`}, ${external.pressureHpa == null ? "давление уточняется" : `${pressureMmHg(external.pressureHpa)} мм`}, влажность ${external.humidityPct == null ? "уточняется" : `${Math.round(external.humidityPct)}%`}.` : "Данные о погоде ещё загружаются — пока можно смотреть только на свои отметки.";
   const ordered = (Object.keys(day.zones) as ZoneKey[]).sort((a, b) => day.zones[a] - day.zones[b]);
-  const report = `${ZONE_META[ordered[0]].short} сейчас ниже, ${ZONE_META[ordered.at(-1) ?? ordered[0]].short} выше. ${allContextReport} Это контекст для наблюдения, а не вывод о причине.`;
+  const report = `Сегодня ${ZONE_META[ordered[0]].label.toLowerCase()} ниже, а ${ZONE_META[ordered.at(-1) ?? ordered[0]].label.toLowerCase()} выше. ${allContextReport} Это фон для наблюдения, а не объяснение причины.`;
 
   return <SheetLayer onClose={onClose}>
     <section className="bottom-sheet" role="dialog" aria-modal="true" aria-labelledby="day-sheet-title">
@@ -69,9 +69,9 @@ export function DaySheet({ day, environment, symptoms, activeContexts, internalW
 
       <p className="sheet-section-label">Включённые слои</p>
       {activeLayers.has("internal") && <div className="absolute-data-grid layer-data"><article><small>Внутренняя среда</small><strong>{day.integral > 0 ? "+" : ""}{day.integral}</strong><em>средняя волна</em></article>{visibleInternal.map((zone) => <article key={zone}><small>{ZONE_META[zone].short}</small><strong>{day.zones[zone] > 0 ? "+" : ""}{day.zones[zone]}</strong><em>{feelingLabel(day.zones[zone])}</em></article>)}</div>}
-      {activeLayers.has("external") && <div className="active-layer-note"><i style={{ background: "#65d6ef" }} /><span>Внешняя среда</span><small>средняя волна включена</small></div>}
+      {activeLayers.has("external") && <div className="active-layer-note"><i style={{ background: "#65d6ef" }} /><span>Внешняя среда</span><small>показываем общую картину</small></div>}
       {visibleExternal.length > 0 && <div className="absolute-data-grid layer-data">{visibleExternal.map((row) => <article key={row.key}><small>{CONTEXT_META[row.key].label}</small><strong>{row.value}</strong><em>{row.detail}</em></article>)}</div>}
-      {activeLayers.has("behavior") && <div className="active-layer-note"><i style={{ background: "#ffd06c" }} /><span>Поведенческая среда</span><small>средняя волна включена</small></div>}
+      {activeLayers.has("behavior") && <div className="active-layer-note"><i style={{ background: "#ffd06c" }} /><span>Поведенческая среда</span><small>показываем общую картину</small></div>}
       {visibleBehavior.length > 0 && <div className="absolute-data-grid layer-data">{visibleBehavior.map((key) => {
         const value = key === "deviceMotion" || key === "movement" ? deviceSignals?.motion == null ? "—" : `${deviceSignals.motion}` : key === "deviceTilt" ? deviceSignals?.tilt == null ? "—" : `${deviceSignals.tilt}°` : key === "phoneActivity" ? deviceSignals ? `${Math.round(deviceSignals.activeSeconds / 60)} мин` : "—" : "—";
         const detail = key === "deviceMotion" ? "ускорение телефона" : key === "deviceTilt" ? deviceSignals?.orientation === "landscape" ? "горизонтально" : "вертикально" : key === "phoneActivity" ? "активность страницы" : "требует нативного приложения";
@@ -348,24 +348,24 @@ export function ConnectionsSheet({ day, days, environment, onClose }: { day: Day
   const temperature = days.map((item) => temperatureByDate.get(item.iso) ?? null);
   const coincidence = findDirectionalCoincidence(internal, temperature);
   const coincidenceCopy = coincidence.matches === 0 ? null
-    : coincidence.matches === 1 ? "Первое совпадение: изменения внутренней волны и температуры шли в одну сторону. Это мягкая гипотеза для наблюдения."
-    : `${coincidence.matches} из ${coincidence.observed} наблюдаемых изменений внутренней волны и температуры были однонаправленными${coincidence.direction ? ` (${coincidence.direction})` : ""}.`;
+    : coincidence.matches === 1 ? "Мы заметили: в этот раз твоя общая волна менялась в ту же сторону, что и температура. Пока это только первое совпадение."
+    : `В ${coincidence.matches} из ${coincidence.observed} похожих изменений общая волна и температура двигались в одну сторону. Это может быть личной связью — посмотрим, повторится ли она.`;
 
   return <SheetLayer onClose={onClose} className="connections-layer">
     <section className="connections-sheet" role="dialog" aria-modal="true" aria-labelledby="connections-title">
-      <header className="sheet-header"><div><p className="eyebrow">исследовательский режим</p><h2 id="connections-title">Показать связи</h2></div><button type="button" aria-label="Закрыть" onClick={onClose}>×</button></header>
-      <p className="connections-intro">Сравниваем форму внутренних волн и среды. Совпадение не означает причинность.</p>
+      <header className="sheet-header"><div><p className="eyebrow">личные наблюдения</p><h2 id="connections-title">Что могло быть рядом</h2></div><button type="button" aria-label="Закрыть" onClick={onClose}>×</button></header>
+      <p className="connections-intro">Здесь можно спокойно посмотреть, что чаще бывает рядом с твоим состоянием. Совпадение не доказывает причину.</p>
       <div className="connection-bars">
         {(Object.keys(day.zones) as ZoneKey[]).map((zone) => <div key={zone}><span>{ZONE_META[zone].short}</span><i><b style={{ width: `${Math.abs(day.zones[zone])}%`, background: ZONE_META[zone].color, marginLeft: day.zones[zone] < 0 ? `${50 - Math.abs(day.zones[zone]) / 2}%` : "50%" }} /></i><strong>{day.zones[zone] > 0 ? "+" : ""}{day.zones[zone]}</strong></div>)}
       </div>
       <button className={`highlight-toggle${highlight ? " is-on" : ""}`} type="button" onClick={() => setHighlight(!highlight)}><i />автоподсветка <span>{highlight ? "включена" : "выключена"}</span></button>
       {highlight && <div className="connection-findings">
-        <article><p className="eyebrow">структурное расхождение</p><strong>{ZONE_META[high].short} выше, {ZONE_META[low].short} ниже</strong><p>Разница между внутренними волнами — {divergence} пунктов. Это самостоятельный сигнал для наблюдения.</p></article>
-        {environment && <article><p className="eyebrow">внешний фон</p><strong>Давление и влажность наложены отдельно</strong><p>Их форма видна на графике, но она не участвует в расчёте общей субъективной волны.</p></article>}
-        {coincidenceCopy && <article><p className="eyebrow">динамика · температура</p><strong>{coincidence.matches === 1 ? "Возможное совпадение" : "Повторяемость динамики"}</strong><p>{coincidenceCopy}</p></article>}
-        {environment && !coincidenceCopy && <article><p className="eyebrow">динамика среды</p><strong>История ещё накапливается</strong><p>ALMA покажет первую мягкую гипотезу после первого совпадения изменений, а частоту — когда таких дней станет больше.</p></article>}
+        <article><p className="eyebrow">твой сегодняшний ритм</p><strong>{ZONE_META[high].short} выше, {ZONE_META[low].short} ниже</strong><p>Сегодня эти части состояния ощущаются по-разному. Это можно учитывать, когда вспоминаешь свой день.</p></article>
+        {environment && <article><p className="eyebrow">внешний фон</p><strong>Давление и влажность рядом с твоими отметками</strong><p>Они помогают увидеть фон дня, но сами по себе не объясняют самочувствие.</p></article>}
+        {coincidenceCopy && <article><p className="eyebrow">температура и состояние</p><strong>{coincidence.matches === 1 ? "Первое совпадение" : "Появляется повторение"}</strong><p>{coincidenceCopy}</p></article>}
+        {environment && !coincidenceCopy && <article><p className="eyebrow">наблюдаем дальше</p><strong>Связь ещё не успела проявиться</strong><p>Когда в похожие дни появятся повторения, ALMA покажет их простыми словами — например, что изменения давления часто совпадали с изменением настроения.</p></article>}
       </div>}
-      <p className="observation-footnote">Мы ищем повторяемость, а не причину</p>
+      <p className="observation-footnote">Ищем повторения, а не ставим диагнозы</p>
     </section>
   </SheetLayer>;
 }

@@ -47,22 +47,22 @@ function insightFor(day: ReturnType<typeof buildDayModels>[number], symptomsByDa
   if (day.isForecast) {
     const external = environment?.days.find((item) => item.date === day.iso);
     const condition = external?.pressureHpa != null ? `давление около ${Math.round(external.pressureHpa * 0.750062)} мм` : "внешний фон ещё уточняется";
-    return { kicker: "вероятный фон", title: `${relativeDayLabel(day.iso)} · ${phaseLabel(day.phase).toLowerCase()}`, body: `Завтрашние условия: ${condition}. Возможно, ритм будет похож на соседние дни — без обещаний и причинных выводов.`, tone: "forecast" };
+    return { kicker: "мягкий ориентир", title: `${relativeDayLabel(day.iso)} · ${phaseLabel(day.phase).toLowerCase()}`, body: `Завтра ожидается ${condition}. Это только фон дня: когда он наступит, можно будет отметить, как ты себя чувствовала на самом деле.`, tone: "forecast" };
   }
 
   const confirmed = symptomsByDate[day.iso]?.filter((symptom) => symptom.status === "confirmed") ?? [];
   if (confirmed.length) {
     const focus = confirmed[0];
     const repeats = Object.values(symptomsByDate).filter((items) => items.some((item) => item.id === focus.id && item.status === "confirmed")).length;
-    if (repeats >= 3) return { kicker: `${repeats} совпадения`, title: "Похожий личный паттерн", body: `Мы заметили: «${focus.label.toLowerCase()}» повторялось в похожих днях. Это совпадение стоит наблюдать дальше.`, tone: "pattern" };
-    if (repeats === 2) return { kicker: "тихая гипотеза", title: "Похожий эпизод встретился снова", body: `«${focus.label}» совпало с похожим фоном второй раз. Для уверенного инсайта нужен ещё один повтор.`, tone: "quiet" };
-    return { kicker: "новое наблюдение", title: "Первое совпадение сохранено", body: `«${focus.label}» пока встретилось один раз. Вывод рано показывать — система ждёт повторяемости.`, tone: "new" };
+    if (repeats >= 3) return { kicker: "личное наблюдение", title: "Похоже, это повторяется", body: `Мы заметили: «${focus.label.toLowerCase()}» уже встречалось в похожие дни. Это не объясняет причину, но может стать полезной подсказкой.`, tone: "pattern" };
+    if (repeats === 2) return { kicker: "появляется связь", title: "Это повторилось второй раз", body: `«${focus.label}» снова оказалось рядом с похожим фоном. Это ещё не причина, но уже полезное наблюдение.`, tone: "quiet" };
+    return { kicker: "сохраним наблюдение", title: "Отметили на сегодня", body: `«${focus.label}» встретилось впервые. Если это повторится в похожих условиях, ALMA покажет возможную связь.`, tone: "new" };
   }
 
   const ordered = (Object.keys(day.zones) as ZoneKey[]).sort((a, b) => day.zones[a] - day.zones[b]);
   const low = ordered[0];
   const high = ordered.at(-1) ?? low;
-  return { kicker: "гипотеза дня", title: `${ZONE_META[low].short} ниже, ${ZONE_META[high].short} выше`, body: `Внутренние волны расходятся на ${day.zones[high] - day.zones[low]} пунктов. Можно уточнить состояние одним касанием ниже.`, tone: "daily" };
+  return { kicker: "сегодняшний ритм", title: "Внутри сегодня разный темп", body: `Сейчас ${ZONE_META[low].label.toLowerCase()} ниже, а ${ZONE_META[high].label.toLowerCase()} выше. Похоже на то, как ты себя чувствуешь?`, tone: "daily" };
 }
 
 export default function AlmaPrototype() {
@@ -320,9 +320,9 @@ export default function AlmaPrototype() {
 
       <CycleHero profile={profile} days={days} activeIndex={activeIndex} quickAccessLabels={profile.cycleQuickAccessActions ?? (profile.cycleActions ?? ["Контрацептив", "Секс", "Тест на овуляцию"]).slice(0, 3)} quickActionLabels={profile.cycleActions ?? ["Контрацептив", "Секс", "Тест на овуляцию"]} selectedQuickActionLabels={activeSymptoms.filter((item) => item.zone === "general" && item.status === "confirmed").map((item) => item.label)} onToggleQuickAccess={(label) => toggleQuickAction({ label })} onUpdateQuickAccess={updateCycleQuickAccess} onSelectDay={selectDay} onOpenPeriod={() => setCycleSettingsOpen(true)} />
 
-      {!activeDay.isForecast && <ActivityPanel actions={(profile.quickActions ?? []).filter((label) => !["Контрацептив", "Секс", "Мастурбация", "Тест на овуляцию"].includes(label))} catalog={profile.actionCatalog} selected={activeSymptoms.filter((item) => item.zone === "general" && item.status === "confirmed").map((item) => item.label)} onToggle={(label) => toggleQuickAction({ label })} onUpdate={updateActivityActions} />}
+      {!activeDay.isForecast && <ActivityPanel actions={(profile.quickActions ?? []).filter((label) => !["Контрацептив", "Секс", "Мастурбация", "Тест на овуляцию"].includes(label))} catalog={profile.actionCatalog} selected={activeSymptoms.filter((item) => item.zone === "general" && item.status === "confirmed").map((item) => item.label)} values={activeDay.zones} onToggle={(label) => toggleQuickAction({ label })} onUpdate={updateActivityActions} onChange={changeZone} onCommit={commitState} />}
 
-      {!activeDay.isForecast ? <BodyCheckin values={activeDay.zones} symptoms={activeSymptoms} symptomHistory={symptomHistory} activeZone={activeZone} onSelect={setActiveZone} onBeginAdjustment={beginZoneAdjustment} onChange={changeZone} onCommit={commitState} onAddQuickSymptom={addSymptom} onUpdateQuickSymptom={updateSymptom} /> : <section className="forecast-card glass-card"><span>∿</span><div><p className="eyebrow">без ввода в будущее</p><h2>Это вероятный фон</h2><p>Состояние можно уточнить только для наступившего дня. Прогноз остаётся бледным и не смешивается с фактом.</p></div></section>}
+      {!activeDay.isForecast ? <BodyCheckin values={activeDay.zones} symptoms={activeSymptoms} symptomHistory={symptomHistory} activeZone={activeZone} onSelect={setActiveZone} onBeginAdjustment={beginZoneAdjustment} onChange={changeZone} onCommit={commitState} onAddQuickSymptom={addSymptom} onUpdateQuickSymptom={updateSymptom} /> : <section className="forecast-card glass-card"><span>∿</span><div><p className="eyebrow">сначала прожить день</p><h2>Это мягкий ориентир</h2><p>День ещё впереди. Посмотри на фон, а когда он наступит — отметь, как тебе было на самом деле.</p></div></section>}
 
       <section className="wave-section" aria-labelledby="wave-title">
         <header className="wave-section-header">
@@ -345,10 +345,10 @@ export default function AlmaPrototype() {
 
       <section className="deep-actions">
         <button type="button" onClick={() => setDaySheetOpen(true)}><i>○</i><span><small>карточка дня</small>{relativeDayLabel(activeDay.iso)} · весь контекст</span><b>›</b></button>
-        <button type="button" onClick={() => setConnectionsOpen(true)}><i>⌁</i><span><small>исследовательский режим</small>Показать связи</span><b>›</b></button>
+        <button type="button" onClick={() => setConnectionsOpen(true)}><i>⌁</i><span><small>личные наблюдения</small>Посмотреть связи</span><b>›</b></button>
       </section>
 
-      <footer className="app-footer"><p>Observation, not prescription</p><span>ALMA показывает совпадения и вероятный фон, не диагноз и не лечение.</span><i /></footer>
+      <footer className="app-footer"><p>Наблюдение, а не диагноз</p><span>ALMA помогает замечать повторения и фон дня. Она не заменяет врача.</span><i /></footer>
     </div>
 
     <button className="floating-voice-trigger" type="button" onClick={() => setVoiceCheckinOpen(true)} aria-label="Рассказать о дне голосом"><svg viewBox="0 0 48 48" aria-hidden="true"><defs><linearGradient id="fixed-voice-rainbow" x1="8" y1="8" x2="40" y2="40"><stop stopColor="#6ce8ff"/><stop offset=".34" stopColor="#a979ff"/><stop offset=".68" stopColor="#ff83c9"/><stop offset="1" stopColor="#ffd176"/></linearGradient></defs><rect x="17" y="7" width="14" height="23" rx="7"/><path d="M12 24a12 12 0 0 0 24 0M24 36v6M17 42h14"/></svg><span>рассказать</span></button>
