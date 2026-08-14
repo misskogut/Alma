@@ -6,13 +6,36 @@ import { bodySilhouetteAsset } from "../lib/visual-assets";
 import { controlAssets } from "../lib/control-assets";
 
 type ActiveControl = "cognitive" | "emotional" | "libido";
-type Props = { values: ZoneValues; symptoms: SymptomEntry[]; activeZone: ZoneKey | null; onSelect: (zone: ZoneKey) => void; onBeginAdjustment: (zone: ZoneKey) => void; onChange: (zone: ZoneKey, value: number) => void; onCommit: () => void; onAddQuickSymptom: (symptom: SymptomEntry) => void; };
+type Props = { values: ZoneValues; symptoms: SymptomEntry[]; symptomHistory: SymptomEntry[]; activeZone: ZoneKey | null; onSelect: (zone: ZoneKey) => void; onBeginAdjustment: (zone: ZoneKey) => void; onChange: (zone: ZoneKey, value: number) => void; onCommit: () => void; onAddQuickSymptom: (symptom: SymptomEntry) => void; };
 
 const zones: ActiveControl[] = ["cognitive", "emotional", "libido"];
-const suggested: Record<ActiveControl, { negative: string[]; positive: string[] }> = {
-  cognitive: { negative: ["Туман в голове", "Труднее сосредоточиться", "Забывчивость", "Ментальная усталость"], positive: ["Ясность мыслей", "Легче держать фокус", "Быстрые решения", "Интерес к задачам"] },
-  emotional: { negative: ["Эмоциональная чувствительность", "Внутреннее напряжение", "Раздражительность", "Хочется уединиться"], positive: ["Спокойствие", "Тёплый эмоциональный фон", "Устойчивость", "Лёгкость в общении"] },
-  libido: { negative: ["Сниженное желание", "Нужна близость с собой", "Телесная усталость", "Не хочется контакта"], positive: ["Повышенное желание", "Больше телесной энергии", "Чувственность", "Тяга к близости"] },
+type Band = "negativeLight" | "negativeMedium" | "negativeHigh" | "positiveLight" | "positiveMedium" | "positiveHigh";
+type SuggestionSet = { primary: string[]; more: string[] };
+const suggested: Record<ActiveControl, Record<Band, SuggestionSet>> = {
+  cognitive: {
+    negativeLight: { primary: ["Легче отвлекаться", "Нужен более медленный старт", "Небольшая ментальная усталость"], more: ["Сложнее переключаться", "Меньше интереса к задачам", "Хочется паузы", "Замедленный темп", "Труднее собраться"] },
+    negativeMedium: { primary: ["Труднее сосредоточиться", "Туман в голове", "Забывчивость"], more: ["Сложнее принимать решения", "Ошибки в мелочах", "Мысли расползаются", "Многое ускользает", "Нужна тишина"] },
+    negativeHigh: { primary: ["Сильная ментальная усталость", "Очень трудно держать фокус", "Перегруз от информации"], more: ["Трудно воспринимать новое", "Хочется отменить задачи", "Ощущение хаоса в голове", "Тяжело формулировать мысли", "Нужен полный отдых"] },
+    positiveLight: { primary: ["Чуть больше ясности", "Легче начать задачу", "Больше интереса"], more: ["Собранность", "Спокойный темп мыслей", "Легче планировать", "Внимательность к деталям", "Есть ресурс думать"] },
+    positiveMedium: { primary: ["Устойчивый фокус", "Ясность мыслей", "Легче принимать решения"], more: ["Хорошая память", "Легко структурировать", "Продуктивный темп", "Быстрое переключение", "Интерес к сложному"] },
+    positiveHigh: { primary: ["Глубокая концентрация", "Быстрые решения", "Много идей"], more: ["Очень высокая продуктивность", "Легко учиться", "Сильная вовлечённость", "Хочется создавать", "Ясно вижу приоритеты"] },
+  },
+  emotional: {
+    negativeLight: { primary: ["Небольшая чувствительность", "Хочется больше тишины", "Чуть меньше терпения"], more: ["Легко задеться", "Нужна поддержка", "Хочется побыть одной", "Не хочется спешки", "Фон немного тяжёлый"] },
+    negativeMedium: { primary: ["Внутреннее напряжение", "Раздражительность", "Тревожный фон"], more: ["Перепады настроения", "Грусть", "Эмоциональная усталость", "Хочется уединиться", "Сложно расслабиться"] },
+    negativeHigh: { primary: ["Сильное напряжение", "Очень высокая чувствительность", "Ощущение подавленности"], more: ["Трудно справляться с эмоциями", "Слёзы близко", "Сильная тревога", "Жёсткая самокритика", "Нужна бережность"] },
+    positiveLight: { primary: ["Больше спокойствия", "Тёплый фон", "Лёгкость в общении"], more: ["Чуть больше радости", "Есть терпение", "Чувствую устойчивость", "Хочется контакта", "Больше принятия"] },
+    positiveMedium: { primary: ["Эмоциональная устойчивость", "Радость", "Внутреннее спокойствие"], more: ["Много тепла", "Легко общаться", "Есть уверенность", "Хорошее настроение", "Чувствую поддержку"] },
+    positiveHigh: { primary: ["Сильный подъём", "Много радости", "Очень тёплый эмоциональный фон"], more: ["Воодушевление", "Игривость", "Хочется делиться", "Сильная уверенность", "Много благодарности"] },
+  },
+  libido: {
+    negativeLight: { primary: ["Меньше интереса к близости", "Хочется больше личного пространства", "Спокойный телесный фон"], more: ["Нужна нежность без секса", "Хочется быть одной", "Меньше чувственности", "Телу нужен отдых", "Не хочется инициативы"] },
+    negativeMedium: { primary: ["Сниженное желание", "Телесная усталость", "Не хочется контакта"], more: ["Нужна близость с собой", "Не хочется прикосновений", "Сложнее расслабиться", "Сниженная чувственность", "Хочется сна и покоя"] },
+    negativeHigh: { primary: ["Нет ресурса на близость", "Сильная телесная усталость", "Очень нужно уединение"], more: ["Контакт сейчас перегружает", "Хочется дистанции", "Тело просит восстановления", "Не до секса", "Нужна безопасность и покой"] },
+    positiveLight: { primary: ["Больше чувственности", "Есть интерес к близости", "Хочется нежности"], more: ["Приятно быть в теле", "Хочется прикосновений", "Больше телесного тепла", "Лёгкая игривость", "Есть желание контакта"] },
+    positiveMedium: { primary: ["Повышенное желание", "Тяга к близости", "Больше телесной энергии"], more: ["Выраженная чувственность", "Хочется инициативы", "Приятно флиртовать", "Хочется секса", "Уверенность в теле"] },
+    positiveHigh: { primary: ["Сильное желание", "Много телесной энергии", "Очень высокая чувственность"], more: ["Сильная тяга к близости", "Хочется ярких ощущений", "Много инициативы", "Хочется игры", "Тело очень отзывчиво"] },
+  },
 };
 const symptomPositions: Record<ActiveControl, Record<"left" | "right", Array<[number, number]>>> = {
   cognitive: { left: [[4, 10], [7, 22], [12, 33], [3, 45], [15, 55]], right: [[64, 9], [71, 21], [61, 34], [68, 46], [59, 57]] },
@@ -30,13 +53,14 @@ const describeRange = (value: number) => {
   if (value <= 66) return "средняя позитивная";
   return "высокая позитивная";
 };
+const getBand = (value: number): Band => value <= -67 ? "negativeHigh" : value <= -34 ? "negativeMedium" : value < 0 ? "negativeLight" : value <= 33 ? "positiveLight" : value <= 66 ? "positiveMedium" : "positiveHigh";
 
-export default function BodyCheckin({ values, symptoms: confirmedSymptoms, activeZone: _activeZone, onSelect, onBeginAdjustment, onChange, onCommit, onAddQuickSymptom }: Props) {
+export default function BodyCheckin({ values, symptoms: confirmedSymptoms, symptomHistory, activeZone: _activeZone, onSelect, onBeginAdjustment, onChange, onCommit, onAddQuickSymptom }: Props) {
   const [openControl, setOpenControl] = useState<ActiveControl | null>(null);
   const [holding, setHolding] = useState(false);
   const [detailZone, setDetailZone] = useState<ActiveControl | null>(null);
   const [infoOpen, setInfoOpen] = useState(false);
-  const [customMode, setCustomMode] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const [customText, setCustomText] = useState("");
   const [positions, setPositions] = useState<Record<ActiveControl, number>>(centeredPositions);
   const [visualValues, setVisualValues] = useState<Record<ActiveControl, number>>(() => ({ cognitive: values.cognitive, emotional: values.emotional, libido: values.libido }));
@@ -60,7 +84,7 @@ export default function BodyCheckin({ values, symptoms: confirmedSymptoms, activ
     if (!openControl) return;
     setPositions((current) => ({ ...current, [openControl]: 50 }));
     setHolding(false);
-    setCustomMode(false);
+    setMoreOpen(false);
     setCustomText("");
     setOpenControl(null);
   };
@@ -80,7 +104,7 @@ export default function BodyCheckin({ values, symptoms: confirmedSymptoms, activ
       setPositions((current) => ({ ...current, [openControl]: 50 }));
     }
     setDetailZone(null);
-    setCustomMode(false);
+    setMoreOpen(false);
     event.currentTarget.setPointerCapture(event.pointerId);
     pointerStart.current = { x: event.clientX, y: event.clientY };
     didDrag.current = false;
@@ -121,17 +145,24 @@ export default function BodyCheckin({ values, symptoms: confirmedSymptoms, activ
     }
   };
   const value = openControl ? visualValues[openControl] : 0;
-  const symptoms = openControl ? (value < 0 ? suggested[openControl].negative : suggested[openControl].positive) : [];
+  const candidateSet = openControl ? suggested[openControl][getBand(value)] : null;
+  const historyCounts = new Map<string, number>();
+  if (openControl) symptomHistory.filter((symptom) => symptom.status === "confirmed" && symptom.zone === openControl).forEach((symptom) => historyCounts.set(symptom.label, (historyCounts.get(symptom.label) ?? 0) + 1));
+  const rankSymptoms = (labels: string[]) => [...labels].sort((a, b) => (historyCounts.get(b) ?? 0) - (historyCounts.get(a) ?? 0) || labels.indexOf(a) - labels.indexOf(b));
+  const rankedSymptoms = candidateSet ? rankSymptoms([...candidateSet.primary, ...candidateSet.more]) : [];
+  const symptoms = rankedSymptoms.slice(0, 3);
+  const moreSymptoms = rankedSymptoms.slice(3);
   const symptomSide = value < 0 ? "right" : "left";
   const chooseSymptom = (label: string, index: number) => {
     if (!openControl) return;
+    if (confirmedSymptoms.some((symptom) => symptom.zone === openControl && symptom.status === "confirmed" && symptom.label === label)) return;
     onAddQuickSymptom({ id: `quick-${openControl}-${Date.now()}-${index}`, label, zone: openControl, status: "confirmed", intensity: Math.abs(value), suggestedBy: "system" });
-    closeControl();
   };
   const submitCustom = () => {
     const label = customText.trim();
     if (!openControl || !label) return;
     chooseSymptom(label, 99);
+    setCustomText("");
   };
   const detailValue = detailZone ? visualValues[detailZone] : 0;
   const selectedSymptoms = detailZone ? confirmedSymptoms.filter((symptom) => symptom.zone === detailZone && symptom.status === "confirmed") : [];
@@ -167,10 +198,16 @@ export default function BodyCheckin({ values, symptoms: confirmedSymptoms, activ
       </aside>}
       {detailZone && <aside className="control-detail-popover" onPointerDown={(event) => event.stopPropagation()}><button type="button" aria-label="Закрыть" onClick={() => setDetailZone(null)}>×</button><p className="eyebrow">{ZONE_META[detailZone].label}</p><strong>{describeRange(detailValue)} · {formatValue(detailValue)}</strong><small>{selectedSymptoms.length ? <>Выбрано: {selectedSymptoms.map((symptom) => symptom.label).join(" · ")}</> : "Симптомы пока не выбраны"}</small></aside>}
       {openControl && !holding && !detailZone && <div className={`floating-symptoms ${symptomSide} ${openControl}`} style={{ "--zone-color": ZONE_META[openControl].color } as CSSProperties} aria-label="Подходящие ощущения">
-        {symptoms.map((label, index) => { const [left, top] = symptomPositions[openControl][symptomSide][index]; return <button key={label} type="button" style={{ left: `${left}%`, top: `${top}%`, "--delay": `${index * -.7}s` } as CSSProperties} onPointerDown={(event) => event.stopPropagation()} onClick={() => chooseSymptom(label, index)}>{label}</button>; })}
-        {(() => { const [left, top] = symptomPositions[openControl][symptomSide][4]; return <button className="custom-symptom-trigger" type="button" style={{ left: `${left}%`, top: `${top}%`, "--delay": "-1.8s" } as CSSProperties} onPointerDown={(event) => event.stopPropagation()} onClick={() => setCustomMode(true)}>＋ своё</button>; })()}
-        {customMode && <form className="custom-symptom-entry" onPointerDown={(event) => event.stopPropagation()} onSubmit={(event) => { event.preventDefault(); submitCustom(); }}><input autoFocus value={customText} onChange={(event) => setCustomText(event.target.value)} placeholder="Своё ощущение" /><button type="submit" aria-label="Добавить ощущение">+</button></form>}
+        {symptoms.map((label, index) => { const [left, top] = symptomPositions[openControl][symptomSide][index]; const selected = confirmedSymptoms.some((symptom) => symptom.zone === openControl && symptom.status === "confirmed" && symptom.label === label); return <button key={label} className={selected ? "is-selected" : ""} type="button" style={{ left: `${left}%`, top: `${top}%`, "--delay": `${index * -.7}s` } as CSSProperties} onPointerDown={(event) => event.stopPropagation()} onClick={() => chooseSymptom(label, index)}>{label}</button>; })}
+        {(() => { const [left, top] = symptomPositions[openControl][symptomSide][4]; return <button className="more-symptom-trigger" type="button" style={{ left: `${left}%`, top: `${top}%`, "--delay": "-1.8s" } as CSSProperties} onPointerDown={(event) => event.stopPropagation()} onClick={() => setMoreOpen(true)}>＋ ещё</button>; })()}
       </div>}
+      {moreOpen && openControl && !detailZone && <aside className="more-symptoms-panel" style={{ "--zone-color": ZONE_META[openControl].color } as CSSProperties} onPointerDown={(event) => event.stopPropagation()}>
+        <button className="more-close" type="button" aria-label="Закрыть дополнительные ощущения" onClick={() => setMoreOpen(false)}>×</button>
+        <p className="eyebrow">ещё подходящие ощущения</p><strong>{ZONE_META[openControl].label} · {describeRange(value)}</strong>
+        <small>Сначала — частые и распространённые варианты. Со временем личные выборы поднимаются выше.</small>
+        <div className="more-symptom-list">{moreSymptoms.map((label, index) => { const selected = confirmedSymptoms.some((symptom) => symptom.zone === openControl && symptom.status === "confirmed" && symptom.label === label); return <button className={selected ? "is-selected" : ""} key={label} type="button" onClick={() => chooseSymptom(label, index + 10)}>{label}</button>; })}</div>
+        <form className="more-custom-entry" onSubmit={(event) => { event.preventDefault(); submitCustom(); }}><input value={customText} onChange={(event) => setCustomText(event.target.value)} placeholder="Добавить своё ощущение" /><button type="submit">Добавить</button></form>
+      </aside>}
     </div>
   </section>;
 }
