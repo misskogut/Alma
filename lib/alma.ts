@@ -176,9 +176,11 @@ export function getCyclePhase(day: number, profile: AlmaProfile): CyclePhase {
   const ovulation = getOvulationDay(profile);
   if (day <= profile.periodLength) return "menstruation";
   if (day === ovulation) return "ovulation";
-  // The fertile window belongs to the late follicular part of the cycle.
-  // The day after the estimated ovulation is already luteal, never follicular.
-  if (day >= ovulation - 5 && day < ovulation) return "fertile";
+  // Default 28-day rhythm: 5 menstrual days, then 4 calm/low days,
+  // 4 late-follicular (blue) days, ovulation, and the luteal phase.
+  // The two days immediately after estimated ovulation stay luteal in the
+  // biological label; the flower keeps them blue as a visual carry-over.
+  if (day >= ovulation - 4 && day < ovulation) return "fertile";
   if (day < ovulation - 4) return "follicular";
   return "luteal";
 }
