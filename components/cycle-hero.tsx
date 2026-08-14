@@ -93,12 +93,18 @@ export default function CycleHero({
   profile,
   days,
   activeIndex,
+  quickAccessLabels,
+  selectedQuickActionLabels,
+  onToggleQuickAccess,
   onSelectDay,
   onOpenPeriod,
 }: {
   profile: AlmaProfile;
   days: DayModel[];
   activeIndex: number;
+  quickAccessLabels: string[];
+  selectedQuickActionLabels: string[];
+  onToggleQuickAccess: (label: string) => void;
   onSelectDay: (index: number) => void;
   onOpenPeriod: () => void;
 }) {
@@ -518,8 +524,9 @@ export default function CycleHero({
       {!previewDay.isToday && todayIndex >= 0 ? <button className="return-today" type="button" onClick={() => select(todayIndex)}>вернуться к сегодня</button> : null}
     </div>
 
-    <div className="cycle-stage-legend" aria-label="Раскрытие лотоса по фазам цикла">
-      {Object.values(STAGES).map((item) => <span key={item.key} className={item.key === previewStage.key ? "is-active" : ""} title={item.label}><i style={{ background: item.color }} /><b>{item.petals}</b></span>)}
+    <div className="cycle-quick-access" aria-label="Быстрые действия">
+      {quickAccessLabels.map((label) => <button key={label} className={selectedQuickActionLabels.includes(label) ? "is-selected" : ""} type="button" aria-pressed={selectedQuickActionLabels.includes(label)} onClick={() => onToggleQuickAccess(label)}><i>✦</i><span>{label}</span></button>)}
+      {quickAccessLabels.length < 5 && <button className="cycle-quick-access-add" type="button" onClick={onOpenPeriod} aria-label="Настроить быстрые действия">＋</button>}
     </div>
   </section>;
 }
