@@ -265,11 +265,16 @@ export default function AlmaPrototype() {
   }
 
   function updateQuickActions(quickActions: string[], actionCatalog = profile.actionCatalog) {
-    const next = { ...profile, quickActions, actionCatalog };
+    const quickAccessActions = (profile.quickAccessActions ?? []).filter((label) => quickActions.includes(label));
+    const next = { ...profile, quickActions, actionCatalog, quickAccessActions };
     setProfile(next);
     // The working set is also retained in the local ALMA snapshot. The current
     // cloud profile schema only stores cycle settings, so this remains safely
     // device-local until a dedicated preference field is introduced.
+  }
+
+  function updateQuickAccessActions(quickAccessActions: string[]) {
+    setProfile({ ...profile, quickAccessActions: quickAccessActions.slice(0, 5) });
   }
 
   function setLocation(latitude: number, longitude: number, locationName: string) {
@@ -288,7 +293,7 @@ export default function AlmaPrototype() {
         </button>
       </header>
 
-      <CycleHero profile={profile} days={days} activeIndex={activeIndex} onSelectDay={selectDay} onOpenPeriod={() => setCycleSettingsOpen(true)} />
+      <CycleHero profile={profile} days={days} activeIndex={activeIndex} quickAccessLabels={profile.quickAccessActions ?? []} selectedQuickActionLabels={activeSymptoms.filter((item) => item.zone === "general" && item.status === "confirmed").map((item) => item.label)} onToggleQuickAccess={(label) => toggleQuickAction({ label })} onSelectDay={selectDay} onOpenPeriod={() => setCycleSettingsOpen(true)} />
 
       {!activeDay.isForecast ? <BodyCheckin values={activeDay.zones} symptoms={activeSymptoms} symptomHistory={symptomHistory} activeZone={activeZone} onSelect={setActiveZone} onBeginAdjustment={beginZoneAdjustment} onChange={changeZone} onCommit={commitState} onAddQuickSymptom={addSymptom} onUpdateQuickSymptom={updateSymptom} /> : <section className="forecast-card glass-card"><span>∿</span><div><p className="eyebrow">без ввода в будущее</p><h2>Это вероятный фон</h2><p>Состояние можно уточнить только для наступившего дня. Прогноз остаётся бледным и не смешивается с фактом.</p></div></section>}
 
@@ -319,7 +324,7 @@ export default function AlmaPrototype() {
       <footer className="app-footer"><p>Observation, not prescription</p><span>ALMA показывает совпадения и вероятный фон, не диагноз и не лечение.</span><i /></footer>
     </div>
 
-    {cycleSettingsOpen && <CycleSettingsSheet profile={profile} activeIso={activeDay.iso} selectedActionLabels={activeSymptoms.filter((item) => item.zone === "general" && item.status === "confirmed").map((item) => item.label)} onSave={saveProfile} onToggleQuickAction={toggleQuickAction} onUpdateQuickActions={updateQuickActions} onClose={() => setCycleSettingsOpen(false)} />}
+    {cycleSettingsOpen && <CycleSettingsSheet profile={profile} activeIso={activeDay.iso} selectedActionLabels={activeSymptoms.filter((item) => item.zone === "general" && item.status === "confirmed").map((item) => item.label)} onSave={saveProfile} onToggleQuickAction={toggleQuickAction} onUpdateQuickActions={updateQuickActions} onUpdateQuickAccess={updateQuickAccessActions} onClose={() => setCycleSettingsOpen(false)} />}
     {daySheetOpen && <DaySheet day={activeDay} environment={environment} symptoms={activeSymptoms} activeContexts={activeContexts} internalWaves={internalWaves} activeLayers={activeLayers} deviceSignals={null} onClose={() => setDaySheetOpen(false)} />}
     {connectionsOpen && <ConnectionsSheet day={activeDay} days={days} environment={environment} onClose={() => setConnectionsOpen(false)} />}
   </main>;
