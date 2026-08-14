@@ -366,7 +366,7 @@ export default function CycleHero({
       onUpdateQuickAccess(quickAccessLabels.filter((item) => item !== label));
       return;
     }
-    if (quickAccessLabels.length < 5) onUpdateQuickAccess([...quickAccessLabels, label]);
+    if (quickAccessLabels.length < 3) onUpdateQuickAccess([...quickAccessLabels, label]);
   }
 
   return <section
@@ -540,7 +540,7 @@ export default function CycleHero({
     <div className="cycle-quick-access" aria-label="Быстрые действия">
       {quickAccessLabels.map((label) => <button key={label} className={selectedQuickActionLabels.includes(label) ? "is-selected" : ""} type="button" aria-pressed={selectedQuickActionLabels.includes(label)} onClick={() => onToggleQuickAccess(label)}><i>✦</i><span>{label}</span></button>)}
       <button className={`cycle-quick-access-add${quickAccessPickerOpen ? " is-open" : ""}`} type="button" onClick={() => setQuickAccessPickerOpen((value) => !value)} aria-expanded={quickAccessPickerOpen} aria-label="Настроить быстрые действия">＋</button>
-      {quickAccessPickerOpen && <div className="cycle-quick-picker" role="dialog" aria-label="Выбор быстрых действий"><div><p>быстрый доступ</p><button type="button" aria-label="Закрыть" onClick={() => setQuickAccessPickerOpen(false)}>×</button></div><span>Выбери до 5 действий из рабочего набора</span><section>{workingQuickActionLabels.map((label) => <button key={label} className={quickAccessLabels.includes(label) ? "is-selected" : ""} type="button" aria-pressed={quickAccessLabels.includes(label)} disabled={!quickAccessLabels.includes(label) && quickAccessLabels.length >= 5} onClick={() => toggleQuickAccessSlot(label)}><i>{quickAccessLabels.includes(label) ? "✓" : "＋"}</i>{label}</button>)}</section></div>}
+      {quickAccessPickerOpen && <div className="cycle-quick-picker" role="dialog" aria-label="Выбор быстрых действий"><div><p>быстрый доступ</p><button type="button" aria-label="Закрыть" onClick={() => setQuickAccessPickerOpen(false)}>×</button></div><span>Выбери до 3 действий из рабочего набора</span><section>{workingQuickActionLabels.map((label) => <button key={label} className={quickAccessLabels.includes(label) ? "is-selected" : ""} type="button" aria-pressed={quickAccessLabels.includes(label)} disabled={!quickAccessLabels.includes(label) && quickAccessLabels.length >= 3} onClick={() => toggleQuickAccessSlot(label)}><i>{quickAccessLabels.includes(label) ? "✓" : "＋"}</i>{label}</button>)}</section></div>}
     </div>
   </section>;
 }
