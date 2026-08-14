@@ -49,6 +49,8 @@ export type AlmaProfile = {
   latitude: number;
   longitude: number;
   automaticHighlights: boolean;
+  /** Personal working set for the cycle-sheet quick actions. */
+  quickActions?: string[];
 };
 
 export type SymptomStatus = "suggested" | "confirmed" | "dismissed";
@@ -262,6 +264,7 @@ export function defaultProfile(currentIso = todayIso()): AlmaProfile {
     latitude: 51.4855,
     longitude: 46.1268,
     automaticHighlights: true,
+    quickActions: ["Контрацептив", "Медитация", "Йога", "Дыхательная практика"],
   };
 }
 
