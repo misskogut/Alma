@@ -5,7 +5,8 @@ import type { SymptomEntry, ZoneKey, ZoneValues } from "../lib/alma";
 import { ZONE_META, feelingLabel } from "../lib/alma";
 
 type VoiceSymptom = Pick<SymptomEntry, "label" | "zone" | "intensity">;
-export type VoiceDraft = { transcript: string; zones: Partial<ZoneValues>; symptoms: VoiceSymptom[]; actions: string[] };
+type VoiceSuggestion = { label: string; kind: "symptom" | "action"; zone?: SymptomEntry["zone"]; intensity?: number };
+export type VoiceDraft = { transcript: string; zones: Partial<ZoneValues>; symptoms: VoiceSymptom[]; actions: string[]; suggestions: VoiceSuggestion[] };
 
 type Recognition = {
   lang: string; continuous: boolean; interimResults: boolean;
@@ -18,13 +19,12 @@ type RecognitionFactory = new () => Recognition;
 
 declare global { interface Window { SpeechRecognition?: RecognitionFactory; webkitSpeechRecognition?: RecognitionFactory; } }
 
-const SIGNS: Array<{ words: string[]; zone: ZoneKey; value: number; symptom?: VoiceSymptom }> = [
+const SIGNS: Array<{ words: string[]; zone: Exclude<ZoneKey, "physical">; value: number; symptom?: VoiceSymptom }> = [
+  { words: ["много когнитивной нагрузки", "много работал", "много работала", "продуктив", "успела много"], zone: "cognitive", value: 76 },
   { words: ["туман", "тяжелая голова", "тяжёлая голова", "не могу сосредоточ", "трудно сосредоточ", "рассеян"], zone: "cognitive", value: -58, symptom: { label: "Труднее сосредоточиться", zone: "cognitive", intensity: 58 } },
   { words: ["ясная голова", "концентрац", "собран"], zone: "cognitive", value: 56, symptom: { label: "Ясность в голове", zone: "cognitive", intensity: 56 } },
-  { words: ["тревог", "раздраж", "груст", "плакс", "тяжело эмоцион"], zone: "emotional", value: -56, symptom: { label: "Эмоциональная чувствительность", zone: "emotional", intensity: 56 } },
-  { words: ["спокой", "радост", "легко на душе", "вдохнов"], zone: "emotional", value: 55, symptom: { label: "Эмоциональная устойчивость", zone: "emotional", intensity: 55 } },
-  { words: ["устал", "нет сил", "головн", "болит голова", "тело бол"], zone: "physical", value: -52, symptom: { label: "Усталость", zone: "physical", intensity: 52 } },
-  { words: ["энерги", "бодр", "много сил"], zone: "physical", value: 54, symptom: { label: "Бодрость", zone: "physical", intensity: 54 } },
+  { words: ["тревог", "раздраж", "груст", "плакс", "тяжело эмоцион"], zone: "emotional", value: -52, symptom: { label: "Эмоциональная чувствительность", zone: "emotional", intensity: 52 } },
+  { words: ["счастлив", "радост", "довольн", "спокой", "легко на душе", "вдохнов"], zone: "emotional", value: 72, symptom: { label: "Эмоциональная устойчивость", zone: "emotional", intensity: 72 } },
   { words: ["не хочу близост", "либидо низк", "нет желания"], zone: "libido", value: -54, symptom: { label: "Снижение желания", zone: "libido", intensity: 54 } },
   { words: ["хочу близост", "возбужд", "либидо высок", "сильное желание"], zone: "libido", value: 58, symptom: { label: "Повышенное желание", zone: "libido", intensity: 58 } },
   { words: ["поддерж", "приятно общаться", "хорошо с людьми"], zone: "social", value: 47, symptom: { label: "Чувство поддержки", zone: "social", intensity: 47 } },
@@ -32,33 +32,48 @@ const SIGNS: Array<{ words: string[]; zone: ZoneKey; value: number; symptom?: Vo
 ];
 
 const ACTION_ALIASES: Record<string, string[]> = {
-  "Контрацептив": ["контрацептив", "таблетк"], "Медитация": ["медитац"], "Йога": ["йог"], "Дыхательная практика": ["дыхательн"], "Тренировка": ["трениров", "спорт"], "Прогулка": ["прогул"], "Путешествие": ["путешеств", "дорог"], "Массаж": ["массаж"], "Алкоголь": ["алкогол"], "Дневник": ["дневник"],
+  "Контрацептив": ["контрацептив", "таблетк"], "Медитация": ["медитац"], "Йога": ["йог"], "Дыхательная практика": ["дыхательн"], "Тренировка": ["трениров", "спорт"], "Прогулка": ["прогул"], "Путешествие": ["путешеств", "дорог"], "Массаж": ["массаж"], "Алкоголь": ["алкогол"], "Дневник": ["дневник"], "Творчество": ["творчеств", "рисова", "зарисов"],
 };
+
+const EXTRA_FROM_SPEECH: Array<{ words: string[]; suggestion: VoiceSuggestion }> = [
+  { words: ["устал", "устала", "усталость"], suggestion: { kind: "symptom", label: "Усталость", zone: "general", intensity: 45 } },
+  { words: ["головн", "болит голова"], suggestion: { kind: "symptom", label: "Головная боль", zone: "cognitive", intensity: 52 } },
+  { words: ["тошнот"], suggestion: { kind: "symptom", label: "Тошнота", zone: "general", intensity: 45 } },
+  { words: ["вздут"], suggestion: { kind: "symptom", label: "Вздутие живота", zone: "libido", intensity: 42 } },
+  { words: ["болит живот", "боль в животе", "низ живота"], suggestion: { kind: "symptom", label: "Боли внизу живота", zone: "libido", intensity: 55 } },
+  { words: ["выделен"], suggestion: { kind: "symptom", label: "Изменение выделений", zone: "libido", intensity: 35 } },
+  { words: ["секс", "близость была"], suggestion: { kind: "action", label: "Секс" } },
+  { words: ["мастурбац"], suggestion: { kind: "action", label: "Мастурбация" } },
+];
 
 function parseDraft(transcript: string, actionLabels: string[]): VoiceDraft {
   const text = transcript.toLowerCase();
-  const zones: Partial<ZoneValues> = {};
+  const scores: Partial<Record<Exclude<ZoneKey, "physical">, number>> = {};
   const symptoms: VoiceSymptom[] = [];
+  const suggestions: VoiceSuggestion[] = [];
   SIGNS.forEach((item) => {
     if (!item.words.some((word) => text.includes(word))) return;
-    zones[item.zone] = item.value;
+    scores[item.zone] = (scores[item.zone] ?? 0) + item.value;
     if (item.symptom && !symptoms.some((symptom) => symptom.label === item.symptom!.label)) symptoms.push(item.symptom);
   });
-  const actions = actionLabels.filter((label) => (ACTION_ALIASES[label] ?? [label.toLowerCase()]).some((word) => text.includes(word)));
-  return { transcript, zones, symptoms, actions };
+  EXTRA_FROM_SPEECH.forEach((item) => { if (item.words.some((word) => text.includes(word)) && !suggestions.some((suggestion) => suggestion.label === item.suggestion.label)) suggestions.push(item.suggestion); });
+  const knownActions = actionLabels.filter((label) => (ACTION_ALIASES[label] ?? [label.toLowerCase()]).some((word) => text.includes(word)));
+  const zones = Object.fromEntries(Object.entries(scores).filter(([, value]) => value).map(([zone, value]) => [zone, Math.max(-100, Math.min(100, value!))])) as Partial<ZoneValues>;
+  return { transcript, zones, symptoms, actions: knownActions, suggestions };
 }
 
 export default function VoiceCheckinSheet({ actionLabels, onConfirm, onClose }: { actionLabels: string[]; onConfirm: (draft: VoiceDraft) => void; onClose: () => void }) {
   const [transcript, setTranscript] = useState("");
   const [mode, setMode] = useState<"recording" | "review">("recording");
   const [notice, setNotice] = useState("Слушаю. Расскажи свободно, как прошёл день.");
-  const [draft, setDraft] = useState<VoiceDraft>({ transcript: "", zones: {}, symptoms: [], actions: [] });
+  const [draft, setDraft] = useState<VoiceDraft>({ transcript: "", zones: {}, symptoms: [], actions: [], suggestions: [] });
   const [customSymptom, setCustomSymptom] = useState("");
   const [isListening, setIsListening] = useState(false);
+  const [acceptedSuggestions, setAcceptedSuggestions] = useState<string[]>([]);
   const recognition = useRef<Recognition | null>(null);
   const closeSheet = () => { recognition.current?.stop(); onClose(); };
 
-  function buildDraft(nextTranscript = transcript) { const next = parseDraft(nextTranscript, actionLabels); setDraft(next); setMode("review"); }
+  function buildDraft(nextTranscript = transcript) { const next = parseDraft(nextTranscript, actionLabels); setDraft(next); setAcceptedSuggestions([]); setMode("review"); }
   function startListening() {
     const Factory = window.SpeechRecognition ?? window.webkitSpeechRecognition;
     if (!Factory) { setNotice("На этом устройстве распознавание речи недоступно — можно вписать заметку ниже."); return; }
@@ -80,6 +95,13 @@ export default function VoiceCheckinSheet({ actionLabels, onConfirm, onClose }: 
   function removeSymptom(label: string) { setDraft((current) => ({ ...current, symptoms: current.symptoms.filter((symptom) => symptom.label !== label) })); }
   function toggleAction(label: string) { setDraft((current) => ({ ...current, actions: current.actions.includes(label) ? current.actions.filter((item) => item !== label) : [...current.actions, label] })); }
   function addCustom() { const label = customSymptom.trim(); if (!label) return; setDraft((current) => ({ ...current, symptoms: [...current.symptoms, { label, zone: "general", intensity: 40 }] })); setCustomSymptom(""); }
+  function toggleSuggestion(label: string) { setAcceptedSuggestions((current) => current.includes(label) ? current.filter((item) => item !== label) : [...current, label]); }
+  function confirmDraft() {
+    const accepted = draft.suggestions.filter((item) => acceptedSuggestions.includes(item.label));
+    const symptoms = [...draft.symptoms, ...accepted.filter((item) => item.kind === "symptom").map((item) => ({ label: item.label, zone: item.zone ?? "general", intensity: item.intensity ?? 40 }))].filter((item, index, list) => list.findIndex((candidate) => candidate.label === item.label) === index);
+    const actions = [...new Set([...draft.actions, ...accepted.filter((item) => item.kind === "action").map((item) => item.label)])];
+    onConfirm({ ...draft, symptoms, actions }); closeSheet();
+  }
 
   return <div className="sheet-layer voice-layer" role="presentation">
     <section className="bottom-sheet voice-sheet" role="dialog" aria-modal="true" aria-labelledby="voice-title">
@@ -96,10 +118,12 @@ export default function VoiceCheckinSheet({ actionLabels, onConfirm, onClose }: 
         <div className="voice-zone-list">{zoneRows.length ? zoneRows.map(([zone, value]) => <article key={zone} style={{ "--voice-color": ZONE_META[zone].color } as CSSProperties}><div><span>{ZONE_META[zone].label}</span><b>{value > 0 ? "+" : ""}{value} · {feelingLabel(value)}</b></div><input type="range" min="-100" max="100" value={value} onChange={(event) => setZone(zone, Number(event.target.value))} /><button type="button" onClick={() => setDraft((current) => { const zones = { ...current.zones }; delete zones[zone]; return { ...current, zones }; })}>×</button></article>) : <p className="voice-empty">Не нашла уверенной оценки — можно оставить так или отметить через силуэт.</p>}</div>
         <p className="voice-section-label">Симптомы и ощущения</p>
         <div className="voice-symptoms">{symptoms.map((symptom) => <button key={symptom.label} style={{ "--voice-color": ZONE_META[symptom.zone as ZoneKey]?.color ?? "#b48cff" } as CSSProperties} type="button" onClick={() => removeSymptom(symptom.label)}><i>✓</i>{symptom.label}<b>×</b></button>)}</div>
+        {draft.suggestions.some((item) => item.kind === "symptom") && <div className="voice-proposals"><span>Из рассказа — подтвердить при необходимости</span>{draft.suggestions.filter((item) => item.kind === "symptom").map((item) => <button className={acceptedSuggestions.includes(item.label) ? "is-selected" : ""} type="button" key={item.label} onClick={() => toggleSuggestion(item.label)}><i>{acceptedSuggestions.includes(item.label) ? "✓" : "＋"}</i>{item.label}</button>)}</div>}
         <div className="voice-custom"><input value={customSymptom} onChange={(event) => setCustomSymptom(event.target.value)} placeholder="Добавить своё ощущение" /><button type="button" onClick={addCustom}>＋</button></div>
         <p className="voice-section-label">Действия</p>
         <div className="voice-actions">{actionLabels.map((label) => <button key={label} className={draft.actions.includes(label) ? "is-selected" : ""} type="button" onClick={() => toggleAction(label)}><i>{draft.actions.includes(label) ? "✓" : "＋"}</i>{label}</button>)}</div>
-        <button className="voice-confirm" type="button" onClick={() => { onConfirm({ ...draft, transcript }); closeSheet(); }}>Подтвердить отметки</button>
+        {draft.suggestions.some((item) => item.kind === "action") && <div className="voice-proposals voice-action-proposals"><span>Новые действия из рассказа</span>{draft.suggestions.filter((item) => item.kind === "action").map((item) => <button className={acceptedSuggestions.includes(item.label) ? "is-selected" : ""} type="button" key={item.label} onClick={() => toggleSuggestion(item.label)}><i>{acceptedSuggestions.includes(item.label) ? "✓" : "＋"}</i>{item.label}</button>)}</div>}
+        <button className="voice-confirm" type="button" onClick={confirmDraft}>Подтвердить отметки</button>
       </>}
     </section>
   </div>;
