@@ -151,7 +151,20 @@ export default function BodyCheckin({ values, symptoms: confirmedSymptoms, activ
           {isOpen && !detailZone && <><output className="gesture-value"><b>{formatValue(visualValues[zone])}</b></output><span className="gesture-range-label">{describeRange(visualValues[zone])}</span></>}
         </div>;
       })}
-      {infoOpen && <aside className="body-info-popover" onPointerDown={(event) => event.stopPropagation()}><button type="button" aria-label="Закрыть" onClick={() => setInfoOpen(false)}>×</button><strong>Как отметить состояние</strong><p>Проведи значок влево или вправо: −100 — максимально негативный фон, +100 — максимально позитивный.</p><p>Короткий тап открывает текущий диапазон и отмеченные ощущения.</p></aside>}
+      {infoOpen && <aside className="body-info-popover" onPointerDown={(event) => event.stopPropagation()}>
+        <button type="button" aria-label="Закрыть" onClick={() => setInfoOpen(false)}>×</button>
+        <strong>Как работает этот блок</strong>
+        <p>Здесь отмечается личное ощущение дня — не диагноз и не оценка «правильно / неправильно».</p>
+        <ul>
+          <li><b className="info-cognitive">Мозг</b> — когнитивная нагрузка: ясность, концентрация, ментальная усталость.</li>
+          <li><b className="info-emotional">Сердце</b> — эмоциональное состояние: спокойствие, чувствительность, напряжение.</li>
+          <li><b className="info-libido">Лотос</b> — либидо: желание, телесный ресурс, потребность в близости.</li>
+        </ul>
+        <p><em>Короткий тап</em> показывает последнее сохранённое значение и выбранные ощущения.</p>
+        <p><em>Удержание и движение</em> открывает шкалу: влево — негативная нагрузка, вправо — позитивная. Ноль — нейтральный фон.</p>
+        <p>У каждой стороны три равных диапазона: лёгкая, средняя и высокая нагрузка. После отпускания можно выбрать подходящее ощущение или добавить своё.</p>
+        <p>Если снова передвинуть ту же кнопку, прошлый набор ощущений этой зоны заменится новым — в отчёте останется актуальная настройка.</p>
+      </aside>}
       {detailZone && <aside className="control-detail-popover" onPointerDown={(event) => event.stopPropagation()}><button type="button" aria-label="Закрыть" onClick={() => setDetailZone(null)}>×</button><p className="eyebrow">{ZONE_META[detailZone].label}</p><strong>{describeRange(detailValue)} · {formatValue(detailValue)}</strong><small>{selectedSymptoms.length ? <>Выбрано: {selectedSymptoms.map((symptom) => symptom.label).join(" · ")}</> : "Симптомы пока не выбраны"}</small></aside>}
       {openControl && !holding && !detailZone && <div className={`floating-symptoms ${symptomSide} ${openControl}`} style={{ "--zone-color": ZONE_META[openControl].color } as CSSProperties} aria-label="Подходящие ощущения">
         {symptoms.map((label, index) => { const [left, top] = symptomPositions[openControl][symptomSide][index]; return <button key={label} type="button" style={{ left: `${left}%`, top: `${top}%`, "--delay": `${index * -.7}s` } as CSSProperties} onPointerDown={(event) => event.stopPropagation()} onClick={() => chooseSymptom(label, index)}>{label}</button>; })}
