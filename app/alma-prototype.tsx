@@ -274,7 +274,7 @@ export default function AlmaPrototype() {
   }
 
   function updateQuickAccessActions(quickAccessActions: string[]) {
-    setProfile({ ...profile, quickAccessActions: quickAccessActions.slice(0, 3) });
+    setProfile({ ...profile, quickAccessActions: quickAccessActions.slice(0, 5) });
   }
 
   function setLocation(latitude: number, longitude: number, locationName: string) {
