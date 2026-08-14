@@ -264,8 +264,8 @@ export default function AlmaPrototype() {
     if (userId) saveCloudProfile(userId, next).catch(() => setSyncMode("local"));
   }
 
-  function updateQuickActions(quickActions: string[]) {
-    const next = { ...profile, quickActions };
+  function updateQuickActions(quickActions: string[], actionCatalog = profile.actionCatalog) {
+    const next = { ...profile, quickActions, actionCatalog };
     setProfile(next);
     // The working set is also retained in the local ALMA snapshot. The current
     // cloud profile schema only stores cycle settings, so this remains safely
