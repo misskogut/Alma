@@ -109,6 +109,7 @@ export default function CycleHero({
   onOpenPeriod: () => void;
 }) {
   const [isDialInMotion, setIsDialInMotion] = useState(false);
+  const [infoOpen, setInfoOpen] = useState(false);
   const [previewIndexState, setPreviewIndexState] = useState(activeIndex);
   const positionRef = useRef(activeIndex);
   const velocityRef = useRef(0);
@@ -367,6 +368,18 @@ export default function CycleHero({
     data-preview-index={previewIndex}
   >
     <div className="cosmic-dust" aria-hidden="true">{Array.from({ length: 42 }, (_, index) => <i key={index} />)}</div>
+    <header className="cycle-section-header">
+      <div><p className="eyebrow">календарь и здоровье</p><h2 id="cycle-title">Мой цикл</h2></div>
+      <button className="cycle-info-button" type="button" aria-label="Как работает блок «Мой цикл»" aria-expanded={infoOpen} onClick={() => setInfoOpen((value) => !value)}>i</button>
+    </header>
+    {infoOpen && <aside className="cycle-info-popover" onPointerDown={(event) => event.stopPropagation()}>
+      <button type="button" aria-label="Закрыть" onClick={() => setInfoOpen(false)}>×</button>
+      <strong>Как работать с «Моим циклом»</strong>
+      <p>Проводи по дуге влево или вправо: центральный круг показывает выбранную дату, а цветок сразу отражает её расчётную фазу.</p>
+      <p>Нажми на цветок или «отметить», чтобы записать месячные и действия этого дня. Длина цикла уточняется по отмеченным началам.</p>
+      <p>Быстрые кнопки ниже — для частых отметок, связанных с циклом. Одно нажатие добавляет действие на сегодня, повторное — отменяет.</p>
+      <small>Цвет и лепестки — календарный ориентир, а не способ контрацепции и не медицинский диагноз.</small>
+    </aside>}
 
     <svg
       className={`cycle-dial${isPointerDownRef.current ? " is-dragging" : ""}`}

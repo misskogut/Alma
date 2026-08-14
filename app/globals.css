@@ -526,3 +526,33 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 1px solid 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+
+/* The three primary areas are deliberately self-contained: cycle, activity, state. */
+.cycle-hero { min-height: 684px; }
+.cycle-section-header { position: absolute; z-index: 18; top: 14px; left: 15px; right: 15px; display: flex; align-items: center; justify-content: space-between; pointer-events: none; }
+.cycle-section-header .eyebrow { margin: 0 0 2px; color: color-mix(in srgb, var(--cycle-color) 72%, #d7c9dc); font-size: 7px; letter-spacing: .15em; text-transform: uppercase; }
+.cycle-section-header h2 { margin: 0; color: #eee7f1; font-size: 17px; font-weight: 520; letter-spacing: -.025em; }
+.cycle-info-button, .section-info-button, .activity-info-button { width: 27px; height: 27px; display: grid; place-items: center; flex: 0 0 auto; border: 1px solid rgba(233, 218, 243, .28); border-radius: 50%; padding: 0; background: rgba(11, 5, 17, .7); color: #f0e6f5; font: 600 14px/1 Georgia, serif; cursor: pointer; box-shadow: 0 0 13px rgba(190, 119, 255, .16); backdrop-filter: blur(10px); pointer-events: auto; }
+.cycle-info-button { border-color: color-mix(in srgb, var(--cycle-color) 50%, rgba(238,224,247,.26)); color: color-mix(in srgb, var(--cycle-color) 66%, #fff); }
+.cycle-info-popover { position: absolute; z-index: 42; top: 50px; left: 14px; right: 14px; border: 1px solid color-mix(in srgb, var(--cycle-color) 34%, rgba(255,255,255,.1)); border-radius: 17px; padding: 14px 35px 13px 14px; background: rgba(12, 6, 18, .96); box-shadow: 0 18px 42px rgba(0,0,0,.5), 0 0 25px color-mix(in srgb, var(--cycle-color) 12%, transparent); color: #bcb1c1; font-size: 9px; line-height: 1.45; backdrop-filter: blur(18px); }
+.cycle-info-popover > button, .activity-info-popover > button { width: 25px; height: 25px; position: absolute; top: 9px; right: 9px; border: 1px solid rgba(255,255,255,.1); border-radius: 50%; background: transparent; color: #a99daa; font-size: 15px; cursor: pointer; }
+.cycle-info-popover strong, .activity-info-popover strong { display: block; margin-bottom: 7px; color: #f0e8f2; font-size: 11px; font-weight: 550; }
+.cycle-info-popover p, .activity-info-popover p { margin: 6px 0; }
+.cycle-info-popover small { display: block; margin-top: 8px; color: #817585; font-size: 8px; line-height: 1.42; }
+.cycle-dial { top: 48px; }
+.cycle-jump { top: 117px; }
+.phase-badge { top: 113px; }
+.cycle-settings-button { top: 156px; }
+.cycle-lotus-button { top: 163px; }
+.cycle-copy { top: 451px; }
+.cycle-quick-access { bottom: 17px; }
+
+.state-section-header { min-height: 61px; align-items: flex-start; }
+.state-section-header > div > small { display: block; margin-top: 4px; color: #716878; font-size: 8px; }
+.state-section-header .section-info-button { margin-top: 1px; }
+
+.activity-heading-actions { display: flex; align-items: center; gap: 6px; }
+.activity-heading-actions > button:not(.activity-info-button) { min-height: 29px; border: 1px solid rgba(104,224,199,.35); border-radius: 999px; padding: 5px 8px; background: rgba(68,197,169,.1); color: #8ee8d5; font: inherit; font-size: 8px; cursor: pointer; }
+.activity-info-button { border-color: rgba(111, 223, 202, .38); color: #9cf0dc; box-shadow: 0 0 13px rgba(86, 222, 192, .14); }
+.activity-info-popover { position: relative; z-index: 12; margin-top: 10px; border: 1px solid rgba(107, 224, 200, .23); border-radius: 15px; padding: 12px 35px 11px 12px; background: rgba(7, 20, 19, .68); color: #9eabb0; font-size: 9px; line-height: 1.45; }
+.activity-question { margin: 13px 0 0; color: #e9f7f3; font-size: 12px; font-weight: 520; }

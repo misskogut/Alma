@@ -276,6 +276,7 @@ export function defaultProfile(currentIso = todayIso()): AlmaProfile {
     automaticHighlights: true,
     quickActions: ["Йога", "Тренировка", "Прогулка", "Путешествие"],
     cycleActions: ["Контрацептив", "Секс", "Мастурбация", "Тест на овуляцию"],
+    cycleQuickAccessActions: ["Контрацептив", "Секс", "Тест на овуляцию"],
   };
 }
 
