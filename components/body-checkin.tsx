@@ -60,6 +60,13 @@ const symptomPositions: Record<ActiveControl, Record<"left" | "right", Array<[nu
 };
 const centeredPositions = (): Record<ActiveControl, number> => ({ cognitive: 50, emotional: 50, libido: 50 });
 const formatValue = (value: number) => value > 0 ? `+${value}` : `${value}`;
+const searchTokens = (value: string) => value.toLowerCase().replace(/ё/g, "е").match(/[a-zа-я]+/giu)?.map((token) => token.slice(0, Math.min(token.length, 5))) ?? [];
+const matchesSymptom = (label: string, query: string) => {
+  const queryTokens = searchTokens(query);
+  if (!queryTokens.length) return true;
+  const labelTokens = searchTokens(label);
+  return queryTokens.every((queryToken) => labelTokens.some((labelToken) => labelToken.includes(queryToken) || queryToken.includes(labelToken)));
+};
 const describeRange = (value: number) => {
   if (value <= -67) return "высокая негативная";
   if (value <= -34) return "средняя негативная";
@@ -78,6 +85,7 @@ export default function BodyCheckin({ values, symptoms: confirmedSymptoms, sympt
   const [infoOpen, setInfoOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const [customText, setCustomText] = useState("");
+  const [catalogQuery, setCatalogQuery] = useState("");
   const [positions, setPositions] = useState<Record<ActiveControl, number>>(centeredPositions);
   const [visualValues, setVisualValues] = useState<Record<ActiveControl, number>>(() => ({ cognitive: values.cognitive, emotional: values.emotional, libido: values.libido }));
   const controlRefs = useRef<Partial<Record<ActiveControl, HTMLDivElement | null>>>({});
@@ -102,6 +110,7 @@ export default function BodyCheckin({ values, symptoms: confirmedSymptoms, sympt
     setHolding(false);
     setMoreOpen(false);
     setCustomText("");
+    setCatalogQuery("");
     setOpenControl(null);
   };
   const updateFromPointer = (event: PointerEvent<HTMLButtonElement>, zone: ActiveControl) => {
@@ -121,6 +130,7 @@ export default function BodyCheckin({ values, symptoms: confirmedSymptoms, sympt
     }
     setDetailZone(null);
     setMoreOpen(false);
+    setCatalogQuery("");
     event.currentTarget.setPointerCapture(event.pointerId);
     pointerStart.current = { x: event.clientX, y: event.clientY };
     didDrag.current = false;
@@ -178,6 +188,8 @@ export default function BodyCheckin({ values, symptoms: confirmedSymptoms, sympt
     { title: "Другие варианты этой стороны", labels: rankSymptoms(allRangeLabels.filter((label) => !currentLabels.includes(label))) },
     ...extraCatalog[openControl].map((group) => ({ title: group.title, labels: rankSymptoms(group[direction]) })),
   ].filter((group) => group.labels.length) : [];
+  const allCatalogLabels = unique(catalogGroups.flatMap((group) => group.labels));
+  const catalogMatches = catalogQuery.trim() ? allCatalogLabels.filter((label) => matchesSymptom(label, catalogQuery)) : [];
   const symptomSide = value < 0 ? "right" : "left";
   const chooseSymptom = (label: string, index: number) => {
     if (!openControl) return;
@@ -229,13 +241,14 @@ export default function BodyCheckin({ values, symptoms: confirmedSymptoms, sympt
       {detailZone && <aside className="control-detail-popover" onPointerDown={(event) => event.stopPropagation()}><button type="button" aria-label="Закрыть" onClick={() => setDetailZone(null)}>×</button><p className="eyebrow">{ZONE_META[detailZone].label}</p><strong>{describeRange(detailValue)} · {formatValue(detailValue)}</strong><small>{selectedSymptoms.length ? <>Выбрано: {selectedSymptoms.map((symptom) => symptom.label).join(" · ")}</> : "Симптомы пока не выбраны"}</small></aside>}
       {openControl && !holding && !detailZone && <div className={`floating-symptoms ${symptomSide} ${openControl}`} style={{ "--zone-color": ZONE_META[openControl].color } as CSSProperties} aria-label="Подходящие ощущения">
         {symptoms.map((label, index) => { const [left, top] = symptomPositions[openControl][symptomSide][index]; const selected = confirmedSymptoms.some((symptom) => symptom.zone === openControl && symptom.status === "confirmed" && symptom.label === label); return <button key={label} className={selected ? "is-selected" : ""} type="button" style={{ left: `${left}%`, top: `${top}%`, "--delay": `${index * -.7}s` } as CSSProperties} onPointerDown={(event) => event.stopPropagation()} onClick={() => chooseSymptom(label, index)}>{label}</button>; })}
-        {(() => { const [left, top] = symptomPositions[openControl][symptomSide][4]; return <button className="more-symptom-trigger" type="button" style={{ left: `${left}%`, top: `${top}%`, "--delay": "-1.8s" } as CSSProperties} onPointerDown={(event) => event.stopPropagation()} onClick={() => setMoreOpen(true)}>＋ ещё</button>; })()}
+        {(() => { const [left, top] = symptomPositions[openControl][symptomSide][4]; return <button className="more-symptom-trigger" type="button" style={{ left: `${left}%`, top: `${top}%`, "--delay": "-1.8s" } as CSSProperties} onPointerDown={(event) => event.stopPropagation()} onClick={() => { setCatalogQuery(""); setMoreOpen(true); }}>＋ ещё</button>; })()}
       </div>}
       {moreOpen && openControl && !detailZone && <aside className="more-symptoms-panel" style={{ "--zone-color": ZONE_META[openControl].color } as CSSProperties} onPointerDown={(event) => event.stopPropagation()}>
         <button className="more-close" type="button" aria-label="Закрыть дополнительные ощущения" onClick={() => setMoreOpen(false)}>×</button>
         <p className="eyebrow">полный список этой зоны</p><strong>{ZONE_META[openControl].label} · {describeRange(value)}</strong>
         <small>Верхние подсказки — предположение для выбранного диапазона. Здесь — только {direction === "negative" ? "негативные" : "позитивные"} ощущения выбранной стороны; частые личные выборы со временем поднимаются выше.</small>
-        {catalogGroups.map((group, groupIndex) => <section className="more-symptom-group" key={group.title}><p>{group.title}</p><div className="more-symptom-list">{group.labels.map((label, index) => { const selected = confirmedSymptoms.some((symptom) => symptom.zone === openControl && symptom.status === "confirmed" && symptom.label === label); return <button className={selected ? "is-selected" : ""} key={label} type="button" onClick={() => chooseSymptom(label, groupIndex * 100 + index + 10)}>{label}</button>; })}</div></section>)}
+        <label className="symptom-search"><span>⌕</span><input value={catalogQuery} onChange={(event) => setCatalogQuery(event.target.value)} placeholder="Найти симптом" autoComplete="off" />{catalogQuery && <button type="button" aria-label="Очистить поиск" onClick={() => setCatalogQuery("")}>×</button>}</label>
+        {catalogQuery.trim() ? <section className="more-symptom-group search-results"><p>Результаты поиска</p>{catalogMatches.length ? <div className="more-symptom-list">{catalogMatches.map((label, index) => { const selected = confirmedSymptoms.some((symptom) => symptom.zone === openControl && symptom.status === "confirmed" && symptom.label === label); return <button className={selected ? "is-selected" : ""} key={label} type="button" onClick={() => chooseSymptom(label, 700 + index)}>{label}</button>; })}</div> : <div className="search-empty"><span>Похожих симптомов пока нет.</span><button type="button" onClick={() => { chooseSymptom(catalogQuery.trim(), 799); setCatalogQuery(""); }}>＋ Добавить «{catalogQuery.trim()}»</button></div>}</section> : catalogGroups.map((group, groupIndex) => <section className="more-symptom-group" key={group.title}><p>{group.title}</p><div className="more-symptom-list">{group.labels.map((label, index) => { const selected = confirmedSymptoms.some((symptom) => symptom.zone === openControl && symptom.status === "confirmed" && symptom.label === label); return <button className={selected ? "is-selected" : ""} key={label} type="button" onClick={() => chooseSymptom(label, groupIndex * 100 + index + 10)}>{label}</button>; })}</div></section>)}
         <form className="more-custom-entry" onSubmit={(event) => { event.preventDefault(); submitCustom(); }}><input value={customText} onChange={(event) => setCustomText(event.target.value)} placeholder="Добавить своё ощущение" /><button type="submit">Добавить</button></form>
       </aside>}
     </div>
