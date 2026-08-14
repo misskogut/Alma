@@ -176,7 +176,7 @@ export function CycleSettingsSheet({
       onUpdateQuickAccess(quickAccessLabels.filter((item) => item !== label));
       return;
     }
-    if (quickAccessLabels.length < 3) onUpdateQuickAccess([...quickAccessLabels, label]);
+    if (quickAccessLabels.length < 5) onUpdateQuickAccess([...quickAccessLabels, label]);
   }
 
   function addQuickAction(label: string) {
@@ -279,7 +279,7 @@ export function CycleSettingsSheet({
         </div>
         {draggedAction && dragPoint && <div className="quick-action-ghost" style={{ left: dragPoint.x, top: dragPoint.y }} aria-hidden="true"><i>{quickActionFor(draggedAction).icon}</i><span>{draggedAction}</span></div>}
         <button type="button" className={`quick-actions-more${actionsOpen ? " is-open" : ""}`} onClick={() => setActionsOpen((value) => !value)}>{actionsOpen ? "Скрыть каталог" : "＋ добавить"}</button>
-        {actionsOpen && <div className="quick-access-editor"><div><p className="eyebrow">на главном экране</p><strong>Быстрый доступ · до 3</strong></div><p>Выбери действия, которые хочешь отмечать прямо под цветком.</p><div>{quickActions.map((action) => <button key={action.label} className={quickAccessLabels.includes(action.label) ? "is-selected" : ""} type="button" aria-pressed={quickAccessLabels.includes(action.label)} onClick={() => toggleQuickAccess(action.label)}><i>{quickAccessLabels.includes(action.label) ? "✓" : "＋"}</i><span>{action.label}</span></button>)}</div></div>}
+        {actionsOpen && <div className="quick-access-editor"><div><p className="eyebrow">на главном экране</p><strong>Быстрый доступ · до 5</strong></div><p>Выбери действия, которые хочешь отмечать прямо под цветком.</p><div>{quickActions.map((action) => <button key={action.label} className={quickAccessLabels.includes(action.label) ? "is-selected" : ""} type="button" aria-pressed={quickAccessLabels.includes(action.label)} onClick={() => toggleQuickAccess(action.label)}><i>{quickAccessLabels.includes(action.label) ? "✓" : "＋"}</i><span>{action.label}</span></button>)}</div></div>}
         {actionsOpen && <div className="quick-actions-extra quick-actions-catalog" data-quick-zone="catalog"><p className="quick-actions-catalog-intro">Нажми ＋, чтобы вернуть действие наверх. Удерживай рабочую кнопку и перетаскивай её для нового порядка.</p>{(["Бережный ритм", "Тело и контекст"] as const).map((group) => <section key={group}><p>{group}</p><div>{catalogActions.filter((action) => action.group === group).map((action) => <button key={action.label} type="button" onClick={() => addQuickAction(action.label)}><i>{action.icon}</i><span>{action.label}</span><b>＋</b></button>)}</div></section>)}<form className="quick-action-custom" onSubmit={(event) => { event.preventDefault(); addQuickAction(customAction); }}><input value={customAction} onChange={(event) => setCustomAction(event.target.value)} placeholder="Своё действие" maxLength={48} /><button type="submit" disabled={!customAction.trim()}>добавить</button></form></div>}
       </section>
 
