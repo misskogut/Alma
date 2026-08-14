@@ -273,7 +273,7 @@ export default function AlmaPrototype() {
 
       <CycleHero profile={profile} days={days} activeIndex={activeIndex} onSelectDay={selectDay} onOpenPeriod={() => setCycleSettingsOpen(true)} />
 
-      {!activeDay.isForecast ? <BodyCheckin values={activeDay.zones} symptoms={activeSymptoms} symptomHistory={symptomHistory} activeZone={activeZone} onSelect={setActiveZone} onBeginAdjustment={beginZoneAdjustment} onChange={changeZone} onCommit={commitState} onAddQuickSymptom={addSymptom} /> : <section className="forecast-card glass-card"><span>∿</span><div><p className="eyebrow">без ввода в будущее</p><h2>Это вероятный фон</h2><p>Состояние можно уточнить только для наступившего дня. Прогноз остаётся бледным и не смешивается с фактом.</p></div></section>}
+      {!activeDay.isForecast ? <BodyCheckin values={activeDay.zones} symptoms={activeSymptoms} symptomHistory={symptomHistory} activeZone={activeZone} onSelect={setActiveZone} onBeginAdjustment={beginZoneAdjustment} onChange={changeZone} onCommit={commitState} onAddQuickSymptom={addSymptom} onUpdateQuickSymptom={updateSymptom} /> : <section className="forecast-card glass-card"><span>∿</span><div><p className="eyebrow">без ввода в будущее</p><h2>Это вероятный фон</h2><p>Состояние можно уточнить только для наступившего дня. Прогноз остаётся бледным и не смешивается с фактом.</p></div></section>}
 
       <section className="wave-section" aria-labelledby="wave-title">
         <header className="wave-section-header">
