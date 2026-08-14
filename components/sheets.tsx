@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { AlmaProfile, DayModel, EnvironmentPayload, SymptomEntry, ZoneKey } from "../lib/alma";
-import { ZONE_META, addDays, dateFromIso, daysBetween, feelingLabel, formatShortDate, isoFromDate, phaseLabel, pressureMmHg, relativeDayLabel, todayIso, weatherLabel } from "../lib/alma";
+import type { AlmaProfile, ContextKey, DayModel, DeviceSignals, EnvironmentPayload, SymptomEntry, WaveLayerKey, ZoneKey } from "../lib/alma";
+import { CONTEXT_META, ZONE_META, addDays, dateFromIso, daysBetween, feelingLabel, findDirectionalCoincidence, formatShortDate, isoFromDate, phaseLabel, pressureMmHg, relativeDayLabel, todayIso, weatherLabel } from "../lib/alma";
 
 function SheetLayer({ children, onClose, className = "" }: { children: React.ReactNode; onClose: () => void; className?: string }) {
   useEffect(() => {
@@ -14,10 +14,24 @@ function SheetLayer({ children, onClose, className = "" }: { children: React.Rea
   return <div className={`sheet-layer ${className}`} role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>{children}</div>;
 }
 
-export function DaySheet({ day, environment, symptoms, onClose }: { day: DayModel; environment: EnvironmentPayload | null; symptoms: SymptomEntry[]; onClose: () => void }) {
+export function DaySheet({ day, environment, symptoms, activeContexts, internalWaves, activeLayers, deviceSignals, onClose }: {
+  day: DayModel; environment: EnvironmentPayload | null; symptoms: SymptomEntry[]; activeContexts: Set<ContextKey>; internalWaves: Set<ZoneKey>; activeLayers: Set<WaveLayerKey>; deviceSignals: DeviceSignals | null; onClose: () => void;
+}) {
   const external = environment?.days.find((item) => item.date === day.iso) ?? (environment?.current.date === day.iso ? environment.current : null);
   const confirmed = symptoms.filter((symptom) => symptom.status === "confirmed");
-  const zoneOrder: ZoneKey[] = ["cognitive", "emotional", "physical", "libido", "social"];
+  const visibleInternal = (Array.from(internalWaves) as ZoneKey[]).filter((key) => ["cognitive", "emotional", "libido", "social"].includes(key));
+  const externalRows: Array<{ key: ContextKey; value: string; detail: string }> = [
+    { key: "temperature", value: external?.temperatureC == null ? "—" : `${Math.round(external.temperatureC)}°`, detail: weatherLabel(external?.weatherCode ?? null) },
+    { key: "pressure", value: external?.pressureHpa == null ? "—" : `${pressureMmHg(external.pressureHpa)} мм`, detail: external?.pressureHpa == null ? "история не получена" : `${Math.round(external.pressureHpa)} гПа` },
+    { key: "humidity", value: external?.humidityPct == null ? "—" : `${Math.round(external.humidityPct)}%`, detail: "внешняя среда" },
+    { key: "daylight", value: external?.daylightMinutes == null ? "—" : `${Math.floor(external.daylightMinutes / 60)} ч ${external.daylightMinutes % 60} мин`, detail: "восход → закат" },
+    { key: "geomagnetic", value: environment?.geomagnetic ? `Kp ${environment.geomagnetic.kp.toFixed(1)}` : "—", detail: "геомагнитный фон" },
+  ];
+  const visibleExternal = externalRows.filter((row) => activeContexts.has(row.key));
+  const visibleBehavior = (["screenTime", "nightPhone", "movement", "phoneActivity"] as ContextKey[]).filter((key) => activeContexts.has(key));
+  const allContextReport = external ? `Во внешней среде: ${external.temperatureC == null ? "температура уточняется" : `${Math.round(external.temperatureC)}°`}, ${external.pressureHpa == null ? "давление уточняется" : `${pressureMmHg(external.pressureHpa)} мм`}, влажность ${external.humidityPct == null ? "уточняется" : `${Math.round(external.humidityPct)}%`}.` : "Внешние данные ещё загружаются; внутреннее состояние остаётся отдельной волной.";
+  const ordered = (Object.keys(day.zones) as ZoneKey[]).sort((a, b) => day.zones[a] - day.zones[b]);
+  const report = `${ZONE_META[ordered[0]].short} сейчас ниже, ${ZONE_META[ordered.at(-1) ?? ordered[0]].short} выше. ${allContextReport} Это контекст для наблюдения, а не вывод о причине.`;
 
   return <SheetLayer onClose={onClose}>
     <section className="bottom-sheet" role="dialog" aria-modal="true" aria-labelledby="day-sheet-title">
@@ -29,17 +43,19 @@ export function DaySheet({ day, environment, symptoms, onClose }: { day: DayMode
         <p><b>{phaseLabel(day.phase)}</b><span>{day.marker === "menstruation" ? "День менструации отмечен красной бусиной" : day.marker === "ovulation" ? "Расчётная овуляция отмечена светящейся бусиной" : day.marker === "fertile" ? "Вероятное фертильное окно" : "Календарный фон цикла"}</span></p>
       </div>
 
-      {day.isForecast ? <div className="forecast-notice"><i>∿</i><p><strong>Вероятный фон</strong>Это продолжение формы личной волны с учётом последних состояний. Не обещание и не диагноз.</p></div> : <div className="zone-summary-grid">
-        {zoneOrder.map((zone) => <article key={zone}><span style={{ background: ZONE_META[zone].color }} /><small>{ZONE_META[zone].short}</small><strong>{day.zones[zone] > 0 ? "+" : ""}{day.zones[zone]}</strong><em>{feelingLabel(day.zones[zone])}</em></article>)}
-      </div>}
+      <article className="day-report"><p className="eyebrow">краткий отчёт</p><p>{report}</p></article>
 
-      <p className="sheet-section-label">Что было вокруг состояния</p>
-      <div className="absolute-data-grid">
-        <article><small>Температура</small><strong>{external?.temperatureC == null ? "—" : `${Math.round(external.temperatureC)}°`}</strong><em>{weatherLabel(external?.weatherCode ?? null)}</em></article>
-        <article><small>Давление</small><strong>{external?.pressureHpa == null ? "—" : `${pressureMmHg(external.pressureHpa)} мм`}</strong><em>{external?.pressureHpa == null ? "история не получена" : `${Math.round(external.pressureHpa)} гПа`}</em></article>
-        <article><small>Влажность</small><strong>{external?.humidityPct == null ? "—" : `${Math.round(external.humidityPct)}%`}</strong><em>внешняя среда</em></article>
-        <article><small>Световой день</small><strong>{external?.daylightMinutes == null ? "—" : `${Math.floor(external.daylightMinutes / 60)} ч ${external.daylightMinutes % 60} мин`}</strong><em>восход → закат</em></article>
-      </div>
+      <p className="sheet-section-label">Включённые слои</p>
+      {activeLayers.has("internal") && <div className="absolute-data-grid layer-data"><article><small>Внутренняя среда</small><strong>{day.integral > 0 ? "+" : ""}{day.integral}</strong><em>средняя волна</em></article>{visibleInternal.map((zone) => <article key={zone}><small>{ZONE_META[zone].short}</small><strong>{day.zones[zone] > 0 ? "+" : ""}{day.zones[zone]}</strong><em>{feelingLabel(day.zones[zone])}</em></article>)}</div>}
+      {activeLayers.has("external") && <div className="active-layer-note"><i style={{ background: "#65d6ef" }} /><span>Внешняя среда</span><small>средняя волна включена</small></div>}
+      {visibleExternal.length > 0 && <div className="absolute-data-grid layer-data">{visibleExternal.map((row) => <article key={row.key}><small>{CONTEXT_META[row.key].label}</small><strong>{row.value}</strong><em>{row.detail}</em></article>)}</div>}
+      {activeLayers.has("behavior") && <div className="active-layer-note"><i style={{ background: "#ffd06c" }} /><span>Поведенческая среда</span><small>средняя волна включена</small></div>}
+      {visibleBehavior.length > 0 && <div className="absolute-data-grid layer-data">{visibleBehavior.map((key) => {
+        const value = key === "deviceMotion" || key === "movement" ? deviceSignals?.motion == null ? "—" : `${deviceSignals.motion}` : key === "deviceTilt" ? deviceSignals?.tilt == null ? "—" : `${deviceSignals.tilt}°` : key === "phoneActivity" ? deviceSignals ? `${Math.round(deviceSignals.activeSeconds / 60)} мин` : "—" : "—";
+        const detail = key === "deviceMotion" ? "ускорение телефона" : key === "deviceTilt" ? deviceSignals?.orientation === "landscape" ? "горизонтально" : "вертикально" : key === "phoneActivity" ? "активность страницы" : "требует нативного приложения";
+        return <article key={key}><small>{CONTEXT_META[key].label}</small><strong>{value}</strong><em>{detail}</em></article>;
+      })}</div>}
+      {!activeLayers.size && !visibleInternal.length && !visibleExternal.length && !visibleBehavior.length && <p className="no-layer-data">Включи среднюю волну или отдельную метрику под графиком — здесь останутся только выбранные данные.</p>}
 
       <div className="sheet-symptoms"><p className="sheet-section-label">Симптомы и состояния</p>{confirmed.length ? <div>{confirmed.map((symptom) => <span key={symptom.id}>{symptom.label} · {symptom.intensity}%</span>)}</div> : <p>На этот день ничего не подтверждено.</p>}</div>
       <p className="observation-footnote">Observation, not prescription</p>
@@ -161,12 +177,19 @@ export function CycleSettingsSheet({
   </SheetLayer>;
 }
 
-export function ConnectionsSheet({ day, environment, onClose }: { day: DayModel; environment: EnvironmentPayload | null; onClose: () => void }) {
+export function ConnectionsSheet({ day, days, environment, onClose }: { day: DayModel; days: DayModel[]; environment: EnvironmentPayload | null; onClose: () => void }) {
   const [highlight, setHighlight] = useState(true);
   const ordered = (Object.keys(day.zones) as ZoneKey[]).sort((a, b) => day.zones[b] - day.zones[a]);
   const high = ordered[0];
   const low = ordered.at(-1) ?? ordered[0];
   const divergence = day.zones[high] - day.zones[low];
+  const internal = days.map((item) => item.integral);
+  const temperatureByDate = new Map(environment?.days.map((item) => [item.date, item.temperatureC]) ?? []);
+  const temperature = days.map((item) => temperatureByDate.get(item.iso) ?? null);
+  const coincidence = findDirectionalCoincidence(internal, temperature);
+  const coincidenceCopy = coincidence.matches === 0 ? null
+    : coincidence.matches === 1 ? "Первое совпадение: изменения внутренней волны и температуры шли в одну сторону. Это мягкая гипотеза для наблюдения."
+    : `${coincidence.matches} из ${coincidence.observed} наблюдаемых изменений внутренней волны и температуры были однонаправленными${coincidence.direction ? ` (${coincidence.direction})` : ""}.`;
 
   return <SheetLayer onClose={onClose} className="connections-layer">
     <section className="connections-sheet" role="dialog" aria-modal="true" aria-labelledby="connections-title">
@@ -179,6 +202,8 @@ export function ConnectionsSheet({ day, environment, onClose }: { day: DayModel;
       {highlight && <div className="connection-findings">
         <article><p className="eyebrow">структурное расхождение</p><strong>{ZONE_META[high].short} выше, {ZONE_META[low].short} ниже</strong><p>Разница между внутренними волнами — {divergence} пунктов. Это самостоятельный сигнал для наблюдения.</p></article>
         {environment && <article><p className="eyebrow">внешний фон</p><strong>Давление и влажность наложены отдельно</strong><p>Их форма видна на графике, но она не участвует в расчёте общей субъективной волны.</p></article>}
+        {coincidenceCopy && <article><p className="eyebrow">динамика · температура</p><strong>{coincidence.matches === 1 ? "Возможное совпадение" : "Повторяемость динамики"}</strong><p>{coincidenceCopy}</p></article>}
+        {environment && !coincidenceCopy && <article><p className="eyebrow">динамика среды</p><strong>История ещё накапливается</strong><p>ALMA покажет первую мягкую гипотезу после первого совпадения изменений, а частоту — когда таких дней станет больше.</p></article>}
       </div>}
       <p className="observation-footnote">Мы ищем повторяемость, а не причину</p>
     </section>
