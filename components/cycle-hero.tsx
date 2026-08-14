@@ -539,7 +539,7 @@ export default function CycleHero({
       {!previewDay.isToday && todayIndex >= 0 ? <button className="return-today" type="button" onClick={() => select(todayIndex)}>вернуться к сегодня</button> : null}
     </div>
 
-    <button className="voice-trigger" type="button" onClick={onOpenVoice}><i>⌁</i><span>рассказать о дне</span></button>
+    <button className="voice-trigger" type="button" onClick={onOpenVoice}><i><svg viewBox="0 0 48 48" aria-hidden="true"><defs><linearGradient id="voice-rainbow" x1="8" y1="8" x2="40" y2="40"><stop stopColor="#6ce8ff"/><stop offset=".34" stopColor="#a979ff"/><stop offset=".68" stopColor="#ff83c9"/><stop offset="1" stopColor="#ffd176"/></linearGradient></defs><rect x="17" y="7" width="14" height="23" rx="7"/><path d="M12 24a12 12 0 0 0 24 0M24 36v6M17 42h14"/></svg></i><span>рассказать о дне</span></button>
     <div className="cycle-quick-access" aria-label="Быстрые действия">
       {quickAccessLabels.map((label) => <button key={label} className={selectedQuickActionLabels.includes(label) ? "is-selected" : ""} type="button" aria-pressed={selectedQuickActionLabels.includes(label)} onClick={() => onToggleQuickAccess(label)}><i>✦</i><span>{label}</span></button>)}
       <button className={`cycle-quick-access-add${quickAccessPickerOpen ? " is-open" : ""}`} type="button" onClick={() => setQuickAccessPickerOpen((value) => !value)} aria-expanded={quickAccessPickerOpen} aria-label="Настроить быстрые действия">＋</button>
