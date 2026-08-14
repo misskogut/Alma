@@ -161,6 +161,9 @@ export function CycleSettingsSheet({
   const quickActionLabels = profile.quickActions ?? DEFAULT_QUICK_ACTIONS.map((action) => action.label);
   const quickActions = quickActionLabels.map(quickActionFor);
   const catalogActions = ALL_QUICK_ACTIONS.filter((action) => !quickActionLabels.includes(action.label));
+  // Configuration and the day's markers are separate: only an action that is
+  // still in the working set can be presented as selected in this compact UI.
+  const selectedWorkingActionLabels = selectedActionLabels.filter((label) => quickActionLabels.includes(label));
 
   function addQuickAction(label: string) {
     const normalized = label.trim().replace(/\s+/g, " ");
@@ -233,10 +236,10 @@ export function CycleSettingsSheet({
       <p className="settings-intro">Отметь только то, что действительно было сегодня. Длина цикла постепенно уточняется по отмеченным началам.</p>
 
       <section className="quick-actions-block" aria-label="Быстрые отметки">
-        <div className="quick-actions-heading"><div><p className="eyebrow">быстрая отметка</p><strong>Что было сегодня?</strong><small>{actionsOpen ? "Удержи и перетяни действие между наборами." : "Нажми, чтобы отметить действие сегодня."}</small></div><span>{selectedActionLabels.length ? `${selectedActionLabels.length} выбрано` : "по желанию"}</span></div>
+        <div className="quick-actions-heading"><div><p className="eyebrow">быстрая отметка</p><strong>Что было сегодня?</strong><small>{actionsOpen ? "Удержи и перетяни действие между наборами." : "Нажми, чтобы отметить действие сегодня."}</small></div><span>{selectedWorkingActionLabels.length ? `${selectedWorkingActionLabels.length} выбрано` : "по желанию"}</span></div>
         <div className={`quick-actions-grid quick-actions-active${actionsOpen ? " is-editing" : ""}`} data-quick-zone="active">
           {quickActions.map((action) => <div className={`quick-action-card${draggedAction === action.label ? " is-dragging" : ""}`} data-quick-action={action.label} key={action.label}>
-            <button className="quick-action-main" type="button" aria-pressed={selectedActionLabels.includes(action.label)} onClick={() => { if (suppressNextTap.current) { suppressNextTap.current = false; return; } onToggleQuickAction(action); }} onPointerDown={(event) => beginDrag(event, action.label)} onPointerMove={continueDrag} onPointerUp={finishDrag} onPointerCancel={() => { dragStart.current = null; setDraggedAction(null); }}><i>{action.icon}</i><span>{action.label}</span></button>
+            <button className="quick-action-main" type="button" aria-pressed={selectedWorkingActionLabels.includes(action.label)} onClick={() => { if (suppressNextTap.current) { suppressNextTap.current = false; return; } onToggleQuickAction(action); }} onPointerDown={(event) => beginDrag(event, action.label)} onPointerMove={continueDrag} onPointerUp={finishDrag} onPointerCancel={() => { dragStart.current = null; setDraggedAction(null); }}><i>{action.icon}</i><span>{action.label}</span></button>
           </div>)}
           {!quickActions.length && <p className="quick-actions-empty">Добавь действия из каталога ниже.</p>}
         </div>
