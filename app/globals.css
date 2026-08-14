@@ -491,6 +491,12 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 1px solid 
   max-width: 306px;
 }
 
+/* Give the dial its own breathing room inside the framed cycle scene. */
+.cycle-dial { top: 11px; }
+.cycle-jump { top: 80px; }
+.phase-badge { top: 76px; }
+.cycle-settings-button { top: 119px; }
+
 @media (min-width: 700px) {
   .phone-scene { margin: 24px auto; min-height: calc(100svh - 48px); border: 1px solid rgba(255, 255, 255, .055); border-radius: 34px; }
   .cycle-hero { border-radius: 23px; }
