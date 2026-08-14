@@ -44,7 +44,7 @@ const extraCatalog: Record<ActiveControl, CatalogGroup[]> = {
     { title: "Сон и восстановление", negative: ["Сонливость", "Бессонница", "Неспокойный сон", "Раннее пробуждение", "Нужен дневной отдых"], positive: ["Восстановленный сон", "Хорошо выспалась", "Есть запас сил"] },
   ],
   emotional: [
-    { title: "Настроение", negative: ["Перепады настроения", "Грусть", "Тревога", "Апатия", "Растерянность", "Подавленность"], positive: ["Спокойствие", "Радость", "Много энер��ии", "Игривость", "Воодушевление", "Уверенность"] },
+    { title: "Настроение", negative: ["Перепады настроения", "Грусть", "Тревога", "Апатия", "Растерянность", "Подавленность"], positive: ["Спокойствие", "Радость", "Много энергии", "Игривость", "Воодушевление", "Уверенность"] },
     { title: "Напряжение и отношение к себе", negative: ["Стресс", "Чувство вины", "Навязчивые мысли", "Жёсткая самокритика", "Ощущение одиночества", "Хочется поддержки", "Раздражение"], positive: ["Принятие себя", "Эмоциональная лёгкость", "Чувство опоры", "Тепло к себе"] },
   ],
   libido: [
@@ -210,7 +210,7 @@ export default function BodyCheckin({ values, symptoms: confirmedSymptoms, sympt
   const selectedSymptoms = detailZone ? confirmedSymptoms.filter((symptom) => symptom.zone === detailZone && symptom.status === "confirmed") : [];
 
   return <section className="body-card gesture-body-card glass-card" aria-labelledby="body-title">
-    <header className="section-header state-section-header"><div><p className="eyebrow">дневной ориентир</p><h2 id="body-title">Моё состояние</h2><small>удерживай и двигай кнопку от центра</small></div><button className="section-info-button" type="button" aria-label="Как работает блок «Моё состояние»" aria-expanded={infoOpen} onClick={() => { setDetailZone(null); setInfoOpen((current) => !current); }}>i</button></header>
+    <header className="section-header state-section-header"><div><h2 id="body-title">Моё состояние</h2></div><button className="section-info-button" type="button" aria-label="Как работает блок «Моё состояние»" aria-expanded={infoOpen} onClick={() => { setDetailZone(null); setInfoOpen((current) => !current); }}>i</button></header>
     <div className="body-stage gesture-scene" onPointerDown={(event) => { if (event.target === event.currentTarget) { setDetailZone(null); setInfoOpen(false); closeControl(); } }}>
       <img className="silhouette-art" src={bodySilhouetteAsset} alt="Нейоновый силуэт в позе лотоса" />
       {zones.map((zone) => {

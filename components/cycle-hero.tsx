@@ -374,7 +374,7 @@ export default function CycleHero({
   >
     <div className="cosmic-dust" aria-hidden="true">{Array.from({ length: 42 }, (_, index) => <i key={index} />)}</div>
     <header className="cycle-section-header">
-      <div><p className="eyebrow">календарь и здоровье</p><h2 id="cycle-title">Мой цикл</h2></div>
+      <div><h2 id="cycle-title">Мой цикл</h2></div>
       <button className="cycle-info-button" type="button" aria-label="Как работает блок «Мой цикл»" aria-expanded={infoOpen} onClick={() => setInfoOpen((value) => !value)}>i</button>
     </header>
     {infoOpen && <aside className="cycle-info-popover" onPointerDown={(event) => event.stopPropagation()}>

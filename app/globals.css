@@ -597,6 +597,13 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 1px solid 
 .activity-workspace-heading .activity-question { margin: 0; }
 .activity-configure-button { min-height: 29px; flex: 0 0 auto; border: 1px solid rgba(104,224,199,.35); border-radius: 999px; padding: 5px 8px; background: rgba(68,197,169,.1); color: #8ee8d5; font: inherit; font-size: 8px; cursor: pointer; }
 
+/* One quiet header language for the three primary areas. */
+.cycle-section-header, .activity-heading, .state-section-header { border-bottom: 1px solid rgba(237, 222, 244, .10); }
+.cycle-section-header { min-height: 36px; padding-bottom: 8px; }
+.activity-heading, .state-section-header { min-height: 43px; padding-bottom: 10px; }
+.cycle-section-header h2, .activity-heading h2, .state-section-header h2 { color: #f0e9f3; font-size: 17px; font-weight: 520; letter-spacing: -.025em; }
+.activity-heading h2 { color: #e9f8f3; }.state-section-header h2 { color: #f0e8f2; }
+
 /* Two gentle load controls live with daily activity, not in the body check-in. */
 .activity-loads { margin-top: 16px; padding-top: 14px; border-top: 1px solid rgba(129, 233, 208, .12); }
 .activity-loads-heading { display: flex; align-items: end; justify-content: space-between; gap: 10px; }
