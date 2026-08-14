@@ -11,6 +11,28 @@ function SheetLayer({ children, onClose, className = "" }: { children: React.Rea
     return () => window.removeEventListener("keydown", close);
   }, [onClose]);
 
+  useEffect(() => {
+    // iOS can otherwise pass a vertical gesture through a fixed sheet to the
+    // document beneath it. Keep the page in place and let the sheet own scroll.
+    const scrollY = window.scrollY;
+    const body = document.body;
+    const root = document.documentElement;
+    const previous = { position: body.style.position, top: body.style.top, width: body.style.width, overflow: body.style.overflow, rootOverflow: root.style.overflow };
+    body.style.position = "fixed";
+    body.style.top = `-${scrollY}px`;
+    body.style.width = "100%";
+    body.style.overflow = "hidden";
+    root.style.overflow = "hidden";
+    return () => {
+      body.style.position = previous.position;
+      body.style.top = previous.top;
+      body.style.width = previous.width;
+      body.style.overflow = previous.overflow;
+      root.style.overflow = previous.rootOverflow;
+      window.scrollTo(0, scrollY);
+    };
+  }, []);
+
   return <div className={`sheet-layer ${className}`} role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>{children}</div>;
 }
 
