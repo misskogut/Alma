@@ -1,101 +1,114 @@
 "use client";
 
-import type { CSSProperties, KeyboardEvent, PointerEvent } from "react";
-import type { ZoneKey, ZoneValues } from "../lib/alma";
-import { ZONE_META, feelingLabel } from "../lib/alma";
+import { useRef, useState, type CSSProperties, type PointerEvent } from "react";
+import { ZONE_META, clamp, type SymptomEntry, type ZoneKey, type ZoneValues } from "../lib/alma";
+import { bodySilhouetteAsset } from "../lib/visual-assets";
+import { controlAssets } from "../lib/control-assets";
 
-export default function BodyCheckin({
-  values,
-  activeZone,
-  onSelect,
-  onChange,
-  onCommit,
-}: {
-  values: ZoneValues;
-  activeZone: ZoneKey | null;
-  onSelect: (zone: ZoneKey) => void;
-  onChange: (zone: ZoneKey, value: number) => void;
-  onCommit: () => void;
-}) {
-  function commitPointer(event: PointerEvent<HTMLInputElement>) {
-    if (event.button === 0 || event.pointerType === "touch") onCommit();
-  }
+type ActiveControl = "cognitive" | "emotional" | "libido";
+type Props = { values: ZoneValues; activeZone: ZoneKey | null; onSelect: (zone: ZoneKey) => void; onChange: (zone: ZoneKey, value: number) => void; onCommit: () => void; onAddQuickSymptom: (symptom: SymptomEntry) => void; };
 
-  function commitKey(event: KeyboardEvent<HTMLInputElement>) {
-    if (["ArrowLeft", "ArrowRight", "Home", "End", "PageUp", "PageDown"].includes(event.key)) onCommit();
-  }
+const zones: ActiveControl[] = ["cognitive", "emotional", "libido"];
+const suggested: Record<ActiveControl, { negative: string[]; positive: string[] }> = {
+  cognitive: { negative: ["Туман в голове", "Труднее сосредоточиться", "Забывчивость", "Ментальная усталость"], positive: ["Ясность мыслей", "Легче держать фокус", "Быстрые решения", "Интерес к задачам"] },
+  emotional: { negative: ["Эмоциональная чувствительность", "Внутреннее напряжение", "Раздражительность", "Хочется уединиться"], positive: ["Спокойствие", "Тёплый эмоциональный фон", "Устойчивость", "Лёгкость в общении"] },
+  libido: { negative: ["Сниженное желание", "Нужна близость с собой", "Телесная усталость", "Не хочется контакта"], positive: ["Повышенное желание", "Больше телесной энергии", "Чувственность", "Тяга к близости"] },
+};
+const symptomPositions: Record<ActiveControl, Record<"left" | "right", Array<[number, number]>>> = {
+  cognitive: { left: [[4, 10], [7, 22], [12, 33], [3, 45], [15, 55]], right: [[64, 9], [71, 21], [61, 34], [68, 46], [59, 57]] },
+  emotional: { left: [[4, 25], [10, 36], [3, 49], [13, 60], [5, 70]], right: [[65, 25], [57, 37], [69, 49], [61, 60], [68, 70]] },
+  libido: { left: [[5, 48], [13, 59], [3, 69], [15, 79], [6, 86]], right: [[64, 48], [57, 59], [69, 69], [60, 79], [68, 86]] },
+};
+const centeredPositions = (): Record<ActiveControl, number> => ({ cognitive: 50, emotional: 50, libido: 50 });
+const neutralValues = (): Record<ActiveControl, number> => ({ cognitive: 0, emotional: 0, libido: 0 });
+const formatValue = (value: number) => value > 0 ? `+${value}` : `${value}`;
+const describeRange = (value: number) => {
+  if (value <= -67) return "сильно негативно";
+  if (value <= -18) return "слегка негативно";
+  if (value < 18) return "нейтрально";
+  if (value < 67) return "слегка позитивно";
+  return "сильно позитивно";
+};
 
-  return <section className="body-card glass-card" aria-labelledby="body-title">
-    <header className="section-header">
-      <div><p className="eyebrow">5–10 секунд</p><h2 id="body-title">Уточнить состояние</h2></div>
-      <p>Нажмите на светящуюся область</p>
-    </header>
+export default function BodyCheckin({ values: _values, activeZone: _activeZone, onSelect, onChange, onCommit, onAddQuickSymptom }: Props) {
+  const [openControl, setOpenControl] = useState<ActiveControl | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const [customMode, setCustomMode] = useState(false);
+  const [customText, setCustomText] = useState("");
+  const [positions, setPositions] = useState<Record<ActiveControl, number>>(centeredPositions);
+  const [visualValues, setVisualValues] = useState<Record<ActiveControl, number>>(neutralValues);
+  const controlRefs = useRef<Partial<Record<ActiveControl, HTMLDivElement | null>>>({});
 
-    <div className="body-stage">
-      <div className="body-aura" />
-      <svg className="body-figure" viewBox="0 0 360 330" role="img" aria-label="Человек в позе лотоса: интерактивные зоны мозга, сердца, тела и нижнего лотоса">
-        <defs>
-          <linearGradient id="figure-line" x1="0" y1="0" x2="1" y2="1"><stop stopColor="#58b8ff" stopOpacity=".86" /><stop offset=".48" stopColor="#8c63ff" stopOpacity=".55" /><stop offset="1" stopColor="#ff597f" stopOpacity=".78" /></linearGradient>
-          <filter id="figure-glow" x="-100%" y="-100%" width="300%" height="300%"><feGaussianBlur stdDeviation="4" result="b" /><feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
-        </defs>
-        <circle className="figure-outline" cx="180" cy="60" r="31" />
-        <path className="figure-outline" d="M152 85 C139 100 139 124 134 154 C130 178 117 195 92 207" />
-        <path className="figure-outline" d="M208 85 C221 100 221 124 226 154 C230 178 243 195 268 207" />
-        <path className="figure-outline" d="M143 108 C119 116 107 139 96 166 C86 190 65 208 35 226" />
-        <path className="figure-outline" d="M217 108 C241 116 253 139 264 166 C274 190 295 208 325 226" />
-        <path className="figure-outline" d="M132 151 C143 199 141 220 117 241 C91 263 62 267 28 256 C67 297 125 299 180 269" />
-        <path className="figure-outline" d="M228 151 C217 199 219 220 243 241 C269 263 298 267 332 256 C293 297 235 299 180 269" />
-        <path className="figure-outline" d="M92 207 C115 220 134 225 154 232 M268 207 C245 220 226 225 206 232" />
+  const closeControl = () => {
+    if (!openControl) return;
+    setPositions((current) => ({ ...current, [openControl]: 50 }));
+    setVisualValues((current) => ({ ...current, [openControl]: 0 }));
+    setDragging(false);
+    setCustomMode(false);
+    setCustomText("");
+    setOpenControl(null);
+  };
+  const updateFromPointer = (event: PointerEvent<HTMLButtonElement>, zone: ActiveControl) => {
+    const rect = controlRefs.current[zone]?.getBoundingClientRect();
+    if (!rect) return;
+    const position = clamp(((event.clientX - rect.left) / rect.width) * 100, 0, 100);
+    const numeric = clamp(Math.round(position * 2 - 100));
+    setPositions((current) => ({ ...current, [zone]: position }));
+    setVisualValues((current) => ({ ...current, [zone]: numeric }));
+    onChange(zone, numeric);
+  };
+  const start = (event: PointerEvent<HTMLButtonElement>, zone: ActiveControl) => {
+    event.stopPropagation();
+    if (openControl && openControl !== zone) {
+      setPositions((current) => ({ ...current, [openControl]: 50 }));
+      setVisualValues((current) => ({ ...current, [openControl]: 0 }));
+    }
+    setOpenControl(zone);
+    setDragging(true);
+    setCustomMode(false);
+    onSelect(zone);
+    event.currentTarget.setPointerCapture(event.pointerId);
+    updateFromPointer(event, zone);
+  };
+  const finish = (event: PointerEvent<HTMLButtonElement>) => {
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+    setDragging(false);
+    onCommit();
+  };
+  const value = openControl ? visualValues[openControl] : 0;
+  const symptoms = openControl ? (value < 0 ? suggested[openControl].negative : suggested[openControl].positive) : [];
+  const symptomSide = value < 0 ? "right" : "left";
+  const chooseSymptom = (label: string, index: number) => {
+    if (!openControl) return;
+    onAddQuickSymptom({ id: `quick-${openControl}-${Date.now()}-${index}`, label, zone: openControl, status: "confirmed", intensity: Math.abs(value), suggestedBy: "system" });
+    closeControl();
+  };
+  const submitCustom = () => {
+    const label = customText.trim();
+    if (!openControl || !label) return;
+    chooseSymptom(label, 99);
+  };
 
-        <g className={`figure-zone brain${activeZone === "cognitive" ? " is-active" : ""}`} filter="url(#figure-glow)">
-          <circle className="zone-aura" cx="180" cy="59" r="43" />
-          <path d="M162 54 C157 44 166 36 174 42 C178 33 190 36 190 45 C200 42 205 53 198 59 C205 67 196 76 187 71 C182 80 170 74 171 67 C161 70 155 61 162 54Z" />
-          <path className="zone-detail" d="M180 42 V72 M163 53 C172 51 173 58 171 67 M197 52 C188 51 188 60 187 71" />
-        </g>
-        <g className={`figure-zone heart${activeZone === "emotional" ? " is-active" : ""}`} filter="url(#figure-glow)">
-          <circle className="zone-aura" cx="180" cy="143" r="34" />
-          <path d="M180 137 C161 119 145 143 180 170 C215 143 199 119 180 137Z" />
-        </g>
-        <g className={`figure-zone body${activeZone === "physical" ? " is-active" : ""}`} filter="url(#figure-glow)">
-          <ellipse className="zone-aura" cx="180" cy="190" rx="54" ry="63" />
-          <path d="M154 175 C165 183 173 188 180 188 C187 188 195 183 206 175 M157 194 C170 201 190 201 203 194 M164 214 C174 218 186 218 196 214" />
-        </g>
-        <g className={`figure-zone core${activeZone === "libido" ? " is-active" : ""}`} filter="url(#figure-glow)">
-          <circle className="zone-aura" cx="180" cy="254" r="38" />
-          <path d="M180 247 C168 233 156 235 149 247 C161 247 168 254 171 265 C158 258 145 263 140 276 C156 273 169 279 180 291 C191 279 204 273 220 276 C215 263 202 258 189 265 C192 254 199 247 211 247 C204 235 192 233 180 247Z" />
-        </g>
-      </svg>
-
-      <button className="body-hotspot brain" type="button" aria-label="Мозг: когнитивное состояние" onClick={() => onSelect("cognitive")} />
-      <button className="body-hotspot heart" type="button" aria-label="Сердце: эмоциональное состояние" onClick={() => onSelect("emotional")} />
-      <button className="body-hotspot body" type="button" aria-label="Тело: физическое состояние" onClick={() => onSelect("physical")} />
-      <button className="body-hotspot core" type="button" aria-label="Нижний лотос: либидо" onClick={() => onSelect("libido")} />
-
-      <span className="body-label brain">мозг · фокус</span>
-      <span className="body-label heart">сердце · эмоции</span>
-      <span className="body-label body">тело · энергия</span>
-      <span className="body-label core">лотос · либидо</span>
+  return <section className="body-card gesture-body-card glass-card" aria-labelledby="body-title">
+    <header className="section-header"><div><p className="eyebrow">одно движение</p><h2 id="body-title">Уточнить состояние</h2></div><small>свайп от центра</small></header>
+    <div className="body-stage gesture-scene" onPointerDown={(event) => { if (event.target === event.currentTarget) closeControl(); }}>
+      <img className="silhouette-art" src={bodySilhouetteAsset} alt="Нейоновый силуэт в позе лотоса" />
+      {zones.map((zone) => {
+        const isOpen = openControl === zone;
+        return <div key={zone} ref={(node) => { controlRefs.current[zone] = node; }} className={`gesture-control ${zone} ${isOpen ? "is-open" : ""}`} style={{ "--zone-color": ZONE_META[zone].color, "--button-x": `${positions[zone]}%` } as CSSProperties}>
+          {isOpen && <div className="gesture-track" aria-hidden="true"><i className="track-line" /><b className="track-zero" /><span className="track-number start">−100</span><span className="track-number middle">0</span><span className="track-number end">+100</span></div>}
+          <button className="gesture-button" type="button" aria-label={ZONE_META[zone].label} onPointerDown={(event) => start(event, zone)} onPointerMove={(event) => { if (dragging && openControl === zone) updateFromPointer(event, zone); }} onPointerUp={finish} onPointerCancel={finish}>
+            <img className="control-image" src={controlAssets[zone]} alt="" />
+            <span>{ZONE_META[zone].short}</span>
+          </button>
+          {isOpen && <output className="gesture-value"><b>{formatValue(visualValues[zone])}</b><small>{describeRange(visualValues[zone])}</small></output>}
+        </div>;
+      })}
+      {openControl && !dragging && <div className={`floating-symptoms ${symptomSide} ${openControl}`} aria-label="Подходящие ощущения">
+        {symptoms.map((label, index) => { const [left, top] = symptomPositions[openControl][symptomSide][index]; return <button key={label} type="button" style={{ left: `${left}%`, top: `${top}%`, "--delay": `${index * -.7}s` } as CSSProperties} onPointerDown={(event) => event.stopPropagation()} onClick={() => chooseSymptom(label, index)}>{label}</button>; })}
+        {(() => { const [left, top] = symptomPositions[openControl][symptomSide][4]; return <button className="custom-symptom-trigger" type="button" style={{ left: `${left}%`, top: `${top}%`, "--delay": "-1.8s" } as CSSProperties} onPointerDown={(event) => event.stopPropagation()} onClick={() => setCustomMode(true)}>＋ своё</button>; })()}
+        {customMode && <form className="custom-symptom-entry" onPointerDown={(event) => event.stopPropagation()} onSubmit={(event) => { event.preventDefault(); submitCustom(); }}><input autoFocus value={customText} onChange={(event) => setCustomText(event.target.value)} placeholder="Своё ощущение" /><button type="submit" aria-label="Добавить ощущение">+</button></form>}
+      </div>}
     </div>
-
-    <button className={`social-control${activeZone === "social" ? " is-active" : ""}`} type="button" onClick={() => onSelect("social")}>
-      <i><b /><b /><b /></i><span><small>социальный элемент</small>Контакт, поддержка, напряжение</span><strong>›</strong>
-    </button>
-
-    {activeZone && <div className="bipolar-editor" style={{ "--zone-color": ZONE_META[activeZone].color } as CSSProperties}>
-      <div className="bipolar-title">
-        <div><small>{ZONE_META[activeZone].label}</small><strong>{feelingLabel(values[activeZone])}</strong></div>
-        <output>{values[activeZone] > 0 ? "+" : ""}{values[activeZone]}</output>
-      </div>
-      <div className="bipolar-track-wrap">
-        <span className="center-tick" aria-hidden="true" />
-        <input type="range" min="-100" max="100" step="1" value={values[activeZone]} aria-label={`${ZONE_META[activeZone].label}: от минус ста до плюс ста, ноль нейтрально`} onChange={(event) => onChange(activeZone, Number(event.target.value))} onPointerUp={commitPointer} onKeyUp={commitKey} />
-      </div>
-      <div className="bipolar-labels">
-        <span><b>−100</b>сильно негативно</span>
-        <span className="neutral"><b>0</b>нейтрально</span>
-        <span><b>+100</b>сильно позитивно</span>
-      </div>
-      <div className="zone-extremes"><span>{ZONE_META[activeZone].negative}</span><button type="button" onClick={() => onChange(activeZone, 0)}>к нейтрали</button><span>{ZONE_META[activeZone].positive}</span></div>
-    </div>}
   </section>;
 }
