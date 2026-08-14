@@ -202,7 +202,15 @@ export function CycleSettingsSheet({
     }, selectedStart);
   }
 
-  return <SheetLayer onClose={onClose}>
+  function confirmSheet() {
+    if (periodFormOpen) {
+      savePeriod();
+      return;
+    }
+    onClose();
+  }
+
+  return <SheetLayer onClose={onClose} className={`period-layer${periodFormOpen ? " is-expanded" : " is-compact"}`}>
     <section className="bottom-sheet period-sheet" role="dialog" aria-modal="true" aria-labelledby="cycle-settings-title">
       <div className="sheet-handle" />
       <header className="sheet-header"><div><p className="eyebrow">отметки дня</p><h2 id="cycle-settings-title">Цикл и действия</h2></div><button type="button" aria-label="Закрыть" onClick={onClose}>×</button></header>
@@ -270,8 +278,8 @@ export function CycleSettingsSheet({
       </fieldset>
 
       <label className="settings-toggle"><span><b>Автоподсветка фаз</b><small>Дуга показывает расчётные фазы и овуляцию</small></span><input type="checkbox" checked={automaticHighlights} onChange={(event) => setAutomaticHighlights(event.target.checked)} /></label>
-      <button className="primary-action period-save" type="button" disabled={!selectedStart || selectedStart > currentIso} onClick={savePeriod}>отметить месячные</button>
       <p className="settings-legal">Фазы, фертильное окно и овуляция рассчитываются ориентировочно. Это календарное наблюдение, не медицинское заключение.</p></>}
+      <button className="primary-action period-save" type="button" disabled={periodFormOpen && (!selectedStart || selectedStart > currentIso)} onClick={confirmSheet}>подтвердить</button>
     </section>
   </SheetLayer>;
 }
