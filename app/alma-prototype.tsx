@@ -272,6 +272,8 @@ export default function AlmaPrototype() {
 
       <CycleHero profile={profile} days={days} activeIndex={activeIndex} onSelectDay={selectDay} onOpenPeriod={() => setCycleSettingsOpen(true)} />
 
+      {!activeDay.isForecast ? <BodyCheckin values={activeDay.zones} symptoms={activeSymptoms} activeZone={activeZone} onSelect={setActiveZone} onBeginAdjustment={beginZoneAdjustment} onChange={changeZone} onCommit={commitState} onAddQuickSymptom={addSymptom} /> : <section className="forecast-card glass-card"><span>∿</span><div><p className="eyebrow">без ввода в будущее</p><h2>Это вероятный фон</h2><p>Состояние можно уточнить только для наступившего дня. Прогноз остаётся бледным и не смешивается с фактом.</p></div></section>}
+
       <section className="wave-section" aria-labelledby="wave-title">
         <header className="wave-section-header">
           <div><p className="eyebrow">{relativeDayLabel(activeDay.iso)} · {formatShortDate(activeDay.iso)}</p><h2 id="wave-title">Субъективная волна</h2></div>
@@ -287,8 +289,7 @@ export default function AlmaPrototype() {
 
       {!activeDay.isForecast ? <>
         <SymptomCheck symptoms={activeSymptoms} onUpdate={updateSymptom} onAdd={addSymptom} />
-        <BodyCheckin values={activeDay.zones} symptoms={activeSymptoms} activeZone={activeZone} onSelect={setActiveZone} onBeginAdjustment={beginZoneAdjustment} onChange={changeZone} onCommit={commitState} onAddQuickSymptom={addSymptom} />
-      </> : <section className="forecast-card glass-card"><span>∿</span><div><p className="eyebrow">без ввода в будущее</p><h2>Это вероятный фон</h2><p>Состояние можно уточнить только для наступившего дня. Прогноз остаётся бледным и не смешивается с фактом.</p></div></section>}
+      </> : null}
 
       <EnvironmentPanel environment={environment} loading={environmentLoading} error={environmentError} onReload={() => setReloadEnvironment((value) => value + 1)} onLocation={setLocation} />
 
