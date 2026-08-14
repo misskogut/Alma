@@ -230,6 +230,20 @@ export default function AlmaPrototype() {
     if (userId) saveCloudSymptom(userId, activeDay.iso, symptom).catch(() => setSyncMode("local"));
   }
 
+  // A new drag is a replacement of this zone's last check-in, not another
+  // observation layered over it. Historical entries are retained as dismissed
+  // in storage, so they cannot reappear after a refresh.
+  function beginZoneAdjustment(zone: ZoneKey) {
+    setSymptomsByDate((current) => {
+      const list = current[activeDay.iso] ?? [];
+      const dismissed = list.map((symptom) => symptom.zone === zone && symptom.status === "confirmed" ? { ...symptom, status: "dismissed" as const } : symptom);
+      if (userId) dismissed
+        .filter((symptom, index) => symptom.zone === zone && symptom.status === "dismissed" && list[index]?.status === "confirmed")
+        .forEach((symptom) => saveCloudSymptom(userId, activeDay.iso, symptom).catch(() => setSyncMode("local")));
+      return { ...current, [activeDay.iso]: dismissed };
+    });
+  }
+
   function saveProfile(next: AlmaProfile, focusIso?: string) {
     setProfile(next);
     if (focusIso) {
@@ -273,7 +287,7 @@ export default function AlmaPrototype() {
 
       {!activeDay.isForecast ? <>
         <SymptomCheck symptoms={activeSymptoms} onUpdate={updateSymptom} onAdd={addSymptom} />
-        <BodyCheckin values={activeDay.zones} symptoms={activeSymptoms} activeZone={activeZone} onSelect={setActiveZone} onChange={changeZone} onCommit={commitState} onAddQuickSymptom={addSymptom} />
+        <BodyCheckin values={activeDay.zones} symptoms={activeSymptoms} activeZone={activeZone} onSelect={setActiveZone} onBeginAdjustment={beginZoneAdjustment} onChange={changeZone} onCommit={commitState} onAddQuickSymptom={addSymptom} />
       </> : <section className="forecast-card glass-card"><span>∿</span><div><p className="eyebrow">без ввода в будущее</p><h2>Это вероятный фон</h2><p>Состояние можно уточнить только для наступившего дня. Прогноз остаётся бледным и не смешивается с фактом.</p></div></section>}
 
       <EnvironmentPanel environment={environment} loading={environmentLoading} error={environmentError} onReload={() => setReloadEnvironment((value) => value + 1)} onLocation={setLocation} />
