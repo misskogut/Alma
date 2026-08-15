@@ -545,7 +545,7 @@ export default function CycleHero({
 
     <div className="cycle-quick-access cycle-health-access" aria-label="Быстрые отметки цикла">
       {quickAccessLabels.map((label) => <button key={label} className={selectedQuickActionLabels.includes(label) ? "is-selected" : ""} type="button" aria-pressed={selectedQuickActionLabels.includes(label)} onClick={() => onToggleQuickAccess(label)}><i>✦</i><span>{label}</span></button>)}
-      {quickAccessLabels.length < 5 && <button className={`cycle-quick-access-add${quickPickerOpen ? " is-open" : ""}`} type="button" aria-label="Добавить быстрые действия" aria-expanded={quickPickerOpen} onClick={() => setQuickPickerOpen((value) => !value)}>＋</button>}
+      <button className={`cycle-quick-access-add${quickPickerOpen ? " is-open" : ""}`} type="button" aria-label="Настроить быстрые действия" aria-expanded={quickPickerOpen} onClick={() => setQuickPickerOpen((value) => !value)}>＋</button>
       {quickPickerOpen && <div className="cycle-quick-picker" onPointerDown={(event) => event.stopPropagation()}>
         <div><p>Быстрые действия</p><button type="button" aria-label="Закрыть выбор" onClick={() => setQuickPickerOpen(false)}>×</button></div>
         <span>Выбери до пяти действий из набора «Мой цикл».</span>

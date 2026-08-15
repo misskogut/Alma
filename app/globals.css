@@ -595,7 +595,7 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 1px solid 
 .activity-intro { max-width: 270px; margin: 3px 0 13px; color: #817789; font-size: 8px; line-height: 1.42; }
 .activity-workspace-heading { display: flex; align-items: center; justify-content: space-between; gap: 9px; }
 .activity-workspace-heading .activity-question { margin: 0; }
-.activity-configure-button { min-height: 29px; flex: 0 0 auto; border: 1px solid rgba(104,224,199,.35); border-radius: 999px; padding: 5px 8px; background: rgba(68,197,169,.1); color: #8ee8d5; font: inherit; font-size: 8px; cursor: pointer; }
+.activity-configure-button { width: 30px; min-width: 30px; height: 30px; min-height: 30px; display: grid; place-items: center; flex: 0 0 auto; border: 1px solid rgba(104,224,199,.35); border-radius: 50%; padding: 0; background: rgba(68,197,169,.1); color: #8ee8d5; font: 300 19px/1 inherit; cursor: pointer; box-shadow: 0 0 13px rgba(73,222,192,.1); }.activity-configure-button.is-open { border-color: rgba(126,238,215,.67); background: rgba(68,197,169,.19); box-shadow: 0 0 16px rgba(73,222,192,.2); }
 
 /* One quiet header language for the three primary areas. */
 .cycle-section-header, .activity-heading, .state-section-header { border-bottom: 1px solid rgba(237, 222, 244, .10); }
