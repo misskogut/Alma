@@ -448,10 +448,6 @@ export default function CycleHero({
       <strong>{phaseLabel(previewDay.phase)}</strong>
     </div>
 
-    <button className="cycle-settings-button" type="button" onClick={onOpenPeriod} aria-label="Открыть отметки цикла и дня">
-      <span>отметить</span><i>＋</i>
-    </button>
-
     <button className="cycle-lotus-button" type="button" onClick={onOpenPeriod} aria-label="Открыть календарь и отметить месячные">
       <svg className="cycle-lotus" viewBox="0 0 380 230" role="img" aria-labelledby="cycle-title cycle-description">
         <defs>
@@ -533,11 +529,9 @@ export default function CycleHero({
         <text className="lotus-day" x="190" y="130" textAnchor="middle">{previewDay.cycleDay}</text>
         <text className="lotus-day-label" x="190" y="149" textAnchor="middle">день цикла</text>
       </svg>
-      <span className="lotus-tap-hint"><i />нажмите, чтобы отметить месячные</span>
     </button>
 
     <div className="cycle-copy">
-      <p className="cycle-stage-count">{previewStage.petals} из 7 лепестков</p>
       <h1 id="cycle-title">{fertility.label}</h1>
       <p id="cycle-description">{fertility.hint}. Календарный ориентир, не определяет безопасные дни.</p>
       {!previewDay.isToday && todayIndex >= 0 ? <button className="return-today" type="button" onClick={() => select(todayIndex)}>вернуться к сегодня</button> : null}
