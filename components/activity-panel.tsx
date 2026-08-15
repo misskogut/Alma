@@ -3,6 +3,7 @@
 import { useMemo, useState, type CSSProperties } from "react";
 import type { ZoneKey, ZoneValues } from "../lib/alma";
 import { ZONE_META, feelingLabel, type SymptomEntry } from "../lib/alma";
+import { quickSymptomsForLoad, symptomsForZone } from "../lib/symptom-catalog";
 
 const DEFAULT_ACTIONS = ["Йога", "Тренировка", "Прогулка", "Путешествие"];
 const CATALOG = ["Тренировка", "Йога", "Прогулка", "Путешествие", "Медитация", "Дыхательная практика", "Массаж", "Дневник", "Творчество", "Болезнь или травма", "Алкоголь"];
@@ -11,11 +12,6 @@ const LOADS: Array<{ key: Extract<ZoneKey, "physical" | "social">; icon: string;
   { key: "physical", icon: "◉", hint: "движение, усталость и телесный ресурс" },
   { key: "social", icon: "✦", hint: "общение, поддержка и напряжение" },
 ];
-const LOAD_SYMPTOMS: Record<Extract<ZoneKey, "physical" | "social">, { negative: string[]; positive: string[] }> = {
-  physical: { negative: ["Усталость", "Тяжесть в теле", "Мало сил"], positive: ["Есть силы", "Приятная усталость", "Телесная лёгкость"] },
-  social: { negative: ["Социальная усталость", "Напряжение после общения", "Хочется побыть одной"], positive: ["Поддержка", "Тёплое общение", "Лёгкость в контакте"] },
-};
-
 function formatValue(value: number) {
   return `${value > 0 ? "+" : ""}${value}`;
 }
@@ -25,6 +21,7 @@ export default function ActivityPanel({ actions, catalog, selected, values, symp
   const [infoOpen, setInfoOpen] = useState(false);
   const [custom, setCustom] = useState("");
   const [activeLoad, setActiveLoad] = useState<Extract<ZoneKey, "physical" | "social"> | null>(null);
+  const [moreLoad, setMoreLoad] = useState<Extract<ZoneKey, "physical" | "social"> | null>(null);
   const working = actions?.length ? actions : DEFAULT_ACTIONS;
   const all = useMemo(() => Array.from(new Set([...CATALOG, ...(catalog ?? [])])), [catalog]);
   const available = all.filter((item) => !working.includes(item));
@@ -51,18 +48,26 @@ export default function ActivityPanel({ actions, catalog, selected, values, symp
           const active = activeLoad === load.key;
           const meta = ZONE_META[load.key];
           return <article className={`activity-load${active ? " is-open" : ""}`} key={load.key} style={{ "--load-color": meta.color } as CSSProperties}>
-            <button className="activity-load-button" type="button" onClick={() => setActiveLoad(active ? null : load.key)} aria-expanded={active}>
+            <button className="activity-load-button" type="button" onClick={() => { setActiveLoad(active ? null : load.key); setMoreLoad(null); }} aria-expanded={active}>
               <i>{load.icon}</i><span><b>{meta.label}</b><small>{active ? feelingLabel(value) : load.hint}</small></span><em>{formatValue(value)}</em>
             </button>
             {active && <div className="activity-load-editor">
               <input aria-label={meta.label} type="range" min="-100" max="100" value={value} onChange={(event) => onChange(load.key, Number(event.target.value))} onPointerUp={onCommit} onKeyUp={onCommit} />
               <div className="activity-load-scale"><span>−100</span><b>{feelingLabel(value)}</b><span>+100</span></div>
               <div className="activity-load-symptoms" aria-label={`Подходящие ощущения: ${meta.label}`}>
-                {LOAD_SYMPTOMS[load.key][value < 0 ? "negative" : "positive"].map((label) => {
+                {quickSymptomsForLoad(load.key, value).map((label) => {
                   const selected = symptoms.some((item) => item.zone === load.key && item.label === label && item.status === "confirmed");
                   return <button className={selected ? "is-selected" : ""} key={label} type="button" onClick={() => toggleLoadSymptom(load.key, label)}>{label}</button>;
                 })}
               </div>
+              <button className="activity-load-more-trigger" type="button" onClick={() => setMoreLoad(moreLoad === load.key ? null : load.key)} aria-expanded={moreLoad === load.key}>＋ ещё подходящие ощущения</button>
+              {moreLoad === load.key && <div className="activity-load-more-panel" aria-label={`Все подходящие ощущения: ${meta.label}`}>
+                <p>Все {value < 0 ? "неприятные" : "поддерживающие"} ощущения для этой нагрузки</p>
+                <div>{symptomsForZone(load.key, value < 0 ? "negative" : "positive").map((label) => {
+                  const selected = symptoms.some((item) => item.zone === load.key && item.label === label && item.status === "confirmed");
+                  return <button className={selected ? "is-selected" : ""} key={label} type="button" onClick={() => toggleLoadSymptom(load.key, label)}>{label}</button>;
+                })}</div>
+              </div>}
               <button type="button" onClick={() => { onCommit(); setActiveLoad(null); }}>готово</button>
             </div>}
           </article>;
