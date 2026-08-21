@@ -62,6 +62,7 @@ const ACTION_DEFINITIONS: Record<string, string> = {
 
 export interface PrototypeProjection {
   profile: AlmaProfile;
+  hasStoredProfile: boolean;
   states: Record<string, ZoneValues>;
   entries: Record<string, SymptomEntry[]>;
 }
@@ -177,6 +178,7 @@ export class CanonicalPrototypeStore {
 
     return {
       profile: profileFromPreferences(profile?.preferences, fallbackProfile),
+      hasStoredProfile: Boolean(profile),
       states,
       entries,
     };
@@ -252,9 +254,9 @@ export class CanonicalPrototypeStore {
     entry: SymptomEntry;
     userId?: string;
   }) {
-    if (input.entry.zone === "general") return this.saveAction(input);
     const resolved = resolveFeelingDefinition(input.entry.label);
     if (resolved?.kind === "state") return this.saveStateFeeling(input, resolved.id);
+    if (input.entry.zone === "general") return this.saveAction(input);
     return this.saveSymptom(input, resolved?.id);
   }
 

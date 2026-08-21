@@ -10,17 +10,14 @@ import SymptomCheck from "../components/symptom-check";
 import WaveChart from "../components/wave-chart";
 import VoiceCheckinSheet, { type VoiceDraft } from "../components/voice-checkin";
 import type { AlmaProfile, ContextKey, EnvironmentPayload, SymptomEntry, SyncMode, WaveLayerKey, ZoneKey, ZoneValues } from "../lib/alma";
-import { DEFAULT_SYMPTOMS, TIMELINE_RADIUS, ZONE_META, addDays, buildDayModels, defaultProfile, defaultState, formatShortDate, phaseLabel, relativeDayLabel, todayIso } from "../lib/alma";
-import { bootstrapCloud, saveCloudEnvironment, saveCloudProfile, saveCloudState, saveCloudSymptom } from "../lib/supabase";
+import { DEFAULT_SYMPTOMS, TIMELINE_RADIUS, buildDayModels, defaultProfile, formatShortDate, phaseLabel, relativeDayLabel, todayIso } from "../lib/alma";
+import { immediateInputFeedback } from "../lib/alma-core";
+import { CanonicalPrototypeStore, createBrowserCanonicalStore, parseLegacyPrototypeSnapshot, type PrototypeProjection } from "../lib/canonical-prototype-store";
+import { ensureCloudUser } from "../lib/supabase";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 const STORAGE_KEY = "alma-observation-v2";
 const TODAY_INDEX = TIMELINE_RADIUS;
-
-type LocalSnapshot = {
-  profile: AlmaProfile;
-  states: Record<string, ZoneValues>;
-  symptoms: Record<string, SymptomEntry[]>;
-};
 
 function cloneSuggestions() {
   return DEFAULT_SYMPTOMS.map((symptom) => ({ ...symptom }));
@@ -32,18 +29,19 @@ function mergeSymptoms(base: SymptomEntry[], incoming: SymptomEntry[]) {
   return Array.from(map.values());
 }
 
-function parseLocalSnapshot(raw: string | null): LocalSnapshot | null {
-  if (!raw) return null;
-  try {
-    const parsed = JSON.parse(raw) as Partial<LocalSnapshot>;
-    if (!parsed.profile?.lastPeriodStart || !parsed.states || !parsed.symptoms) return null;
-    return parsed as LocalSnapshot;
-  } catch {
-    return null;
-  }
+function withCurrentSuggestions(entries: Record<string, SymptomEntry[]>, currentIso: string) {
+  return {
+    ...entries,
+    [currentIso]: mergeSymptoms(cloneSuggestions(), entries[currentIso] ?? []),
+  };
 }
 
-function insightFor(day: ReturnType<typeof buildDayModels>[number], symptomsByDate: Record<string, SymptomEntry[]>, environment: EnvironmentPayload | null) {
+function insightFor(
+  day: ReturnType<typeof buildDayModels>[number],
+  symptomsByDate: Record<string, SymptomEntry[]>,
+  environment: EnvironmentPayload | null,
+  hasPersonalState: boolean,
+) {
   if (day.isForecast) {
     const external = environment?.days.find((item) => item.date === day.iso);
     const condition = external?.pressureHpa != null ? `давление около ${Math.round(external.pressureHpa * 0.750062)} мм` : "внешний фон ещё уточняется";
@@ -52,23 +50,21 @@ function insightFor(day: ReturnType<typeof buildDayModels>[number], symptomsByDa
 
   const confirmed = symptomsByDate[day.iso]?.filter((symptom) => symptom.status === "confirmed") ?? [];
   if (confirmed.length) {
-    const focus = confirmed[0];
-    const repeats = Object.values(symptomsByDate).filter((items) => items.some((item) => item.id === focus.id && item.status === "confirmed")).length;
-    if (repeats >= 3) return { kicker: "личное наблюдение", title: "Похоже, это повторяется", body: `Мы заметили: «${focus.label.toLowerCase()}» уже встречалось в похожие дни. Это не объясняет причину, но может стать полезной подсказкой.`, tone: "pattern" };
-    if (repeats === 2) return { kicker: "появляется связь", title: "Это повторилось второй раз", body: `«${focus.label}» снова оказалось рядом с похожим фоном. Это ещё не причина, но уже полезное наблюдение.`, tone: "quiet" };
-    return { kicker: "сохраним наблюдение", title: "Отметили на сегодня", body: `«${focus.label}» встретилось впервые. Если это повторится в похожих условиях, ALMA покажет возможную связь.`, tone: "new" };
+    const feedback = immediateInputFeedback("useful_control_day");
+    return { kicker: "наблюдение сохранено", title: feedback.title, body: feedback.body, tone: "new" };
   }
 
-  const ordered = (Object.keys(day.zones) as ZoneKey[]).sort((a, b) => day.zones[a] - day.zones[b]);
-  const low = ordered[0];
-  const high = ordered.at(-1) ?? low;
-  return { kicker: "сегодняшний ритм", title: "Внутри сегодня разный темп", body: `Сейчас ${ZONE_META[low].label.toLowerCase()} ниже, а ${ZONE_META[high].label.toLowerCase()} выше. Похоже на то, как ты себя чувствуешь?`, tone: "daily" };
+  if (hasPersonalState) {
+    const feedback = immediateInputFeedback("unchanged");
+    return { kicker: "сегодняшняя отметка", title: feedback.title, body: feedback.body, tone: "daily" };
+  }
+  return { kicker: "ALMA наблюдает фон", title: "Можно ничего не заполнять", body: "Если захочется уточнить день, достаточно одной короткой отметки. ALMA попросит дополнительные данные только тогда, когда они действительно помогут проверить персональную версию.", tone: "daily" };
 }
 
 export default function AlmaPrototype() {
   const currentIso = useMemo(() => todayIso(), []);
   const [profile, setProfile] = useState<AlmaProfile>(() => defaultProfile(currentIso));
-  const [stateByDate, setStateByDate] = useState<Record<string, ZoneValues>>(() => defaultState(currentIso));
+  const [stateByDate, setStateByDate] = useState<Record<string, ZoneValues>>({});
   const [symptomsByDate, setSymptomsByDate] = useState<Record<string, SymptomEntry[]>>(() => ({ [currentIso]: cloneSuggestions() }));
   const [activeIndex, setActiveIndex] = useState(TODAY_INDEX);
   const [activeZone, setActiveZone] = useState<ZoneKey | null>(null);
@@ -81,70 +77,103 @@ export default function AlmaPrototype() {
   const [reloadEnvironment, setReloadEnvironment] = useState(0);
   const [syncMode, setSyncMode] = useState<SyncMode>("connecting");
   const [userId, setUserId] = useState<string | null>(null);
-  const [hydrated, setHydrated] = useState(false);
+  const [hasStoredProfile, setHasStoredProfile] = useState(false);
   const [cycleSettingsOpen, setCycleSettingsOpen] = useState(false);
   const [daySheetOpen, setDaySheetOpen] = useState(false);
   const [connectionsOpen, setConnectionsOpen] = useState(false);
   const [voiceCheckinOpen, setVoiceCheckinOpen] = useState(false);
   const pendingValues = useRef<ZoneValues | null>(null);
+  const pendingZone = useRef<ZoneKey | null>(null);
+  const canonicalStore = useRef<CanonicalPrototypeStore | null>(null);
+  const cloudConnection = useRef<{ client: SupabaseClient; userId: string } | null>(null);
+  const syncRunning = useRef(false);
+  const syncRequested = useRef(false);
+  const bootStarted = useRef(false);
+  const profileRef = useRef(profile);
 
   const days = useMemo(() => buildDayModels(profile, stateByDate, currentIso), [profile, stateByDate, currentIso]);
   const activeDay = days[activeIndex];
   const activeSymptoms = symptomsByDate[activeDay.iso] ?? [];
   const symptomHistory = useMemo(() => Object.values(symptomsByDate).flat(), [symptomsByDate]);
   const confirmedCount = activeSymptoms.filter((symptom) => symptom.status === "confirmed").length;
-  const insight = insightFor(activeDay, symptomsByDate, environment);
+  const insight = insightFor(activeDay, symptomsByDate, environment, Boolean(stateByDate[activeDay.iso]));
 
-  const connectCloud = useCallback(async (local: LocalSnapshot | null = null) => {
+  const applyProjection = useCallback((projection: PrototypeProjection) => {
+    profileRef.current = projection.profile;
+    setProfile(projection.profile);
+    setHasStoredProfile(projection.hasStoredProfile);
+    setStateByDate(projection.states);
+    setSymptomsByDate(withCurrentSuggestions(projection.entries, currentIso));
+  }, [currentIso]);
+
+  const runCanonicalSync = useCallback(async () => {
+    const store = canonicalStore.current;
+    const cloud = cloudConnection.current;
+    if (!store || !cloud) return;
+    syncRequested.current = true;
+    if (syncRunning.current) return;
+    syncRunning.current = true;
+    try {
+      while (syncRequested.current) {
+        syncRequested.current = false;
+        await store.sync(cloud.client, cloud.userId);
+      }
+      setSyncMode("cloud");
+    } catch {
+      setSyncMode("local");
+    } finally {
+      syncRunning.current = false;
+      // A local mutation can arrive after the loop has observed `false` but
+      // before this runner releases the lock. Restart in that narrow window so
+      // an acknowledged UI action is never left waiting for another gesture.
+      if (syncRequested.current) void runCanonicalSync();
+    }
+  }, []);
+
+  const persistCanonical = useCallback((operation: (store: CanonicalPrototypeStore) => Promise<unknown>) => {
+    const store = canonicalStore.current;
+    if (!store) return;
+    void operation(store)
+      .then(() => runCanonicalSync())
+      .catch(() => setSyncMode("local"));
+  }, [runCanonicalSync]);
+
+  const connectCloud = useCallback(async (fallbackProfile = profileRef.current) => {
+    const store = canonicalStore.current;
+    if (!store) return;
     setSyncMode("connecting");
     try {
-      const defaults = local?.profile ?? profile;
-      const cloud = await bootstrapCloud(defaults, addDays(currentIso, -120), addDays(currentIso, 45));
-      const nextProfile = local?.profile ?? cloud.profile;
-      setProfile(nextProfile);
-      setStateByDate((previous) => ({ ...previous, ...cloud.states, ...(local?.states ?? {}) }));
-      setSymptomsByDate((previous) => {
-        const next = { ...previous };
-        for (const [date, list] of Object.entries(cloud.symptoms)) next[date] = mergeSymptoms(next[date] ?? [], list);
-        for (const [date, list] of Object.entries(local?.symptoms ?? {})) next[date] = mergeSymptoms(next[date] ?? [], list);
-        next[currentIso] = mergeSymptoms(cloneSuggestions(), next[currentIso] ?? []);
-        return next;
-      });
-      setUserId(cloud.userId);
+      const cloud = await ensureCloudUser();
+      cloudConnection.current = { client: cloud.supabase, userId: cloud.user.id };
+      setUserId(cloud.user.id);
+      await store.sync(cloud.supabase, cloud.user.id);
+      const projection = await store.loadProjection(fallbackProfile);
+      applyProjection(projection);
       setSyncMode("cloud");
-      if (local) {
-        await Promise.all([
-          saveCloudProfile(cloud.userId, nextProfile),
-          ...Object.entries(local.states).map(([date, values]) => saveCloudState(cloud.userId, date, values)),
-          ...Object.entries(local.symptoms).flatMap(([date, list]) => list
-            .filter((symptom) => symptom.status !== "suggested" || symptom.suggestedBy === "user")
-            .map((symptom) => saveCloudSymptom(cloud.userId, date, symptom))),
-        ]);
-      }
     } catch {
+      cloudConnection.current = null;
       setUserId(null);
       setSyncMode("local");
     }
-  }, [currentIso, profile]);
+  }, [applyProjection]);
 
   useEffect(() => {
-    const local = parseLocalSnapshot(window.localStorage.getItem(STORAGE_KEY));
-    if (local) {
-      setProfile(local.profile);
-      setStateByDate({ ...defaultState(currentIso), ...local.states });
-      setSymptomsByDate({ ...local.symptoms, [currentIso]: mergeSymptoms(cloneSuggestions(), local.symptoms[currentIso] ?? []) });
+    if (bootStarted.current) return;
+    bootStarted.current = true;
+    let cancelled = false;
+    async function bootstrapCanonical() {
+      const store = createBrowserCanonicalStore();
+      canonicalStore.current = store;
+      const legacy = parseLegacyPrototypeSnapshot(window.localStorage.getItem(STORAGE_KEY));
+      await store.migrateLegacyIfNeeded(legacy);
+      const projection = await store.loadProjection(profileRef.current);
+      if (cancelled) return;
+      applyProjection(projection);
+      await connectCloud(projection.profile);
     }
-    setHydrated(true);
-    void connectCloud(local);
-    // This bootstraps once; manual retries use the status button.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    if (!hydrated) return;
-    const snapshot: LocalSnapshot = { profile, states: stateByDate, symptoms: symptomsByDate };
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
-  }, [hydrated, profile, stateByDate, symptomsByDate]);
+    void bootstrapCanonical().catch(() => setSyncMode("local"));
+    return () => { cancelled = true; };
+  }, [applyProjection, connectCloud]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -168,13 +197,14 @@ export default function AlmaPrototype() {
   }, [profile.latitude, profile.longitude, profile.locationName, reloadEnvironment]);
 
   useEffect(() => {
-    if (!userId || !environment) return;
-    saveCloudEnvironment(userId, environment).catch(() => setSyncMode("local"));
-  }, [userId, environment]);
+    if (!hasStoredProfile || !environment) return;
+    persistCanonical((store) => store.recordEnvironment(environment, userId ?? undefined));
+  }, [environment, hasStoredProfile, persistCanonical, userId]);
 
   useEffect(() => {
     setActiveZone(null);
     pendingValues.current = null;
+    pendingZone.current = null;
   }, [activeIndex]);
 
   function toggleContext(key: ContextKey) {
@@ -213,12 +243,21 @@ export default function AlmaPrototype() {
   function changeZone(zone: ZoneKey, value: number) {
     const next = { ...activeDay.zones, [zone]: value };
     pendingValues.current = next;
+    pendingZone.current = zone;
     setStateByDate((current) => ({ ...current, [activeDay.iso]: next }));
   }
 
   function commitState() {
+    const zone = pendingZone.current;
+    if (!zone) return;
     const values = pendingValues.current ?? activeDay.zones;
-    if (userId) saveCloudState(userId, activeDay.iso, values).catch(() => setSyncMode("local"));
+    pendingZone.current = null;
+    persistCanonical((store) => store.saveZoneResponse({
+      localDate: activeDay.iso,
+      zone,
+      value: values[zone],
+      userId: userId ?? undefined,
+    }));
   }
 
   function updateSymptom(symptom: SymptomEntry) {
@@ -226,12 +265,12 @@ export default function AlmaPrototype() {
       const list = current[activeDay.iso] ?? [];
       return { ...current, [activeDay.iso]: list.map((item) => item.id === symptom.id ? symptom : item) };
     });
-    if (userId) saveCloudSymptom(userId, activeDay.iso, symptom).catch(() => setSyncMode("local"));
+    persistCanonical((store) => store.saveEntry({ localDate: activeDay.iso, entry: symptom, userId: userId ?? undefined }));
   }
 
   function addSymptom(symptom: SymptomEntry) {
     setSymptomsByDate((current) => ({ ...current, [activeDay.iso]: [...(current[activeDay.iso] ?? []), symptom] }));
-    if (userId) saveCloudSymptom(userId, activeDay.iso, symptom).catch(() => setSyncMode("local"));
+    persistCanonical((store) => store.saveEntry({ localDate: activeDay.iso, entry: symptom, userId: userId ?? undefined }));
   }
 
   function toggleQuickAction(action: { label: string }) {
@@ -250,62 +289,79 @@ export default function AlmaPrototype() {
     setSymptomsByDate((current) => {
       const list = current[activeDay.iso] ?? [];
       const dismissed = list.map((symptom) => symptom.zone === zone && symptom.status === "confirmed" ? { ...symptom, status: "dismissed" as const } : symptom);
-      if (userId) dismissed
+      dismissed
         .filter((symptom, index) => symptom.zone === zone && symptom.status === "dismissed" && list[index]?.status === "confirmed")
-        .forEach((symptom) => saveCloudSymptom(userId, activeDay.iso, symptom).catch(() => setSyncMode("local")));
+        .forEach((symptom) => persistCanonical((store) => store.saveEntry({ localDate: activeDay.iso, entry: symptom, userId: userId ?? undefined })));
       return { ...current, [activeDay.iso]: dismissed };
     });
   }
 
-  function saveProfile(next: AlmaProfile, focusIso?: string) {
+  function persistProfile(next: AlmaProfile) {
+    profileRef.current = next;
     setProfile(next);
+    setHasStoredProfile(true);
+    persistCanonical((store) => store.saveProfile(next, userId ?? undefined));
+  }
+
+  function saveProfile(next: AlmaProfile, focusIso?: string) {
+    persistProfile(next);
     if (focusIso) {
       const focusIndex = days.findIndex((item) => item.iso === focusIso);
       if (focusIndex >= 0) setActiveIndex(focusIndex);
     }
     setCycleSettingsOpen(false);
-    if (userId) saveCloudProfile(userId, next).catch(() => setSyncMode("local"));
   }
 
   function updateCycleActions(cycleActions: string[], cycleActionCatalog = profile.cycleActionCatalog) {
     const cycleQuickAccessActions = (profile.cycleQuickAccessActions ?? []).filter((label) => cycleActions.includes(label));
     const next = { ...profile, cycleActions, cycleActionCatalog, cycleQuickAccessActions };
-    setProfile(next);
-    // The working set is also retained in the local ALMA snapshot. The current
-    // cloud profile schema only stores cycle settings, so this remains safely
-    // device-local until a dedicated preference field is introduced.
+    persistProfile(next);
   }
 
   function updateActivityActions(quickActions: string[], actionCatalog: string[]) {
-    setProfile({ ...profile, quickActions, actionCatalog });
+    persistProfile({ ...profile, quickActions, actionCatalog });
   }
 
   function updateCycleQuickAccess(cycleQuickAccessActions: string[]) {
-    setProfile({ ...profile, cycleQuickAccessActions: cycleQuickAccessActions.slice(0, 5) });
+    persistProfile({ ...profile, cycleQuickAccessActions: cycleQuickAccessActions.slice(0, 5) });
   }
 
   function applyVoiceDraft(draft: VoiceDraft) {
     const nextZones = { ...activeDay.zones, ...draft.zones };
     setStateByDate((current) => ({ ...current, [activeDay.iso]: nextZones }));
-    if (userId) saveCloudState(userId, activeDay.iso, nextZones).catch(() => setSyncMode("local"));
-    const incoming = [...draft.symptoms, ...draft.actions.map((label) => ({ label, zone: "general" as const, intensity: 0 }))];
+    for (const [zone, value] of Object.entries(draft.zones) as Array<[ZoneKey, number]>) {
+      persistCanonical((store) => store.saveZoneResponse({ localDate: activeDay.iso, zone, value, userId: userId ?? undefined }));
+    }
+    const incoming = [
+      ...draft.symptoms.map((item) => ({ ...item, zone: item.zone === "general" ? "physical" as const : item.zone })),
+      ...draft.actions.map((label) => ({ label, zone: "general" as const, intensity: 0 })),
+    ];
+    const savedEntries: SymptomEntry[] = incoming.map((item) => {
+      const found = activeSymptoms.find((symptom) => symptom.label === item.label && symptom.zone === item.zone);
+      return {
+        id: found?.id ?? `voice-${activeDay.iso}-${item.label.toLowerCase().replace(/[^a-zа-яё0-9]+/giu, "-")}`,
+        label: item.label,
+        zone: item.zone,
+        status: "confirmed",
+        intensity: item.intensity,
+        suggestedBy: "user",
+      };
+    });
     setSymptomsByDate((current) => {
       const existing = current[activeDay.iso] ?? [];
       const next = [...existing];
-      incoming.forEach((item) => {
-        const found = next.findIndex((symptom) => symptom.label === item.label && symptom.zone === item.zone);
-        const symptom: SymptomEntry = { id: found >= 0 ? next[found].id : `voice-${activeDay.iso}-${item.label.toLowerCase().replace(/[^a-zа-яё0-9]+/giu, "-")}`, label: item.label, zone: item.zone, status: "confirmed", intensity: item.intensity, suggestedBy: "user" };
-        if (found >= 0) next[found] = symptom; else next.push(symptom);
-        if (userId) saveCloudSymptom(userId, activeDay.iso, symptom).catch(() => setSyncMode("local"));
+      savedEntries.forEach((entry) => {
+        const found = next.findIndex((symptom) => symptom.label === entry.label && symptom.zone === entry.zone);
+        if (found >= 0) next[found] = entry; else next.push(entry);
       });
       return { ...current, [activeDay.iso]: next };
     });
+    savedEntries.forEach((entry) => persistCanonical((store) => store.saveEntry({ localDate: activeDay.iso, entry, userId: userId ?? undefined })));
   }
 
   function setLocation(latitude: number, longitude: number, locationName: string) {
     const next = { ...profile, latitude, longitude, locationName };
-    setProfile(next);
-    if (userId) saveCloudProfile(userId, next).catch(() => setSyncMode("local"));
+    persistProfile(next);
   }
 
   return <main className="app-stage">
@@ -313,7 +369,7 @@ export default function AlmaPrototype() {
     <div className="phone-scene">
       <header className="app-header">
         <div className="brand"><span className="brand-mark">A</span><div><strong>ALMA</strong><small>наблюдение во времени</small></div></div>
-        <button className={`sync-status status-${syncMode}`} type="button" onClick={() => syncMode === "local" && void connectCloud({ profile, states: stateByDate, symptoms: symptomsByDate })} aria-label={syncMode === "local" ? "Повторить облачную синхронизацию" : undefined}>
+        <button className={`sync-status status-${syncMode}`} type="button" onClick={() => syncMode === "local" && void connectCloud()} aria-label={syncMode === "local" ? "Повторить облачную синхронизацию" : undefined}>
           <i />{syncMode === "connecting" ? "подключение" : syncMode === "cloud" ? "синхронизировано" : "на устройстве"}
         </button>
       </header>

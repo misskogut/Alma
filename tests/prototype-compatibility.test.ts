@@ -85,6 +85,24 @@ test("known feelings remain state observations rather than symptom episodes", as
   assert.equal((await database.list("symptoms")).length, 0);
 });
 
+test("a known state label is not converted into an action by the legacy general zone", async () => {
+  const database = new LocalDatabase(new MemoryStorageAdapter(), "voice-state-test");
+  const store = new CanonicalPrototypeStore(database);
+  await store.saveEntry({
+    localDate: "2026-08-21",
+    entry: {
+      id: "voice-fatigue",
+      label: "Усталость",
+      zone: "general",
+      status: "confirmed",
+      intensity: 45,
+      suggestedBy: "user",
+    },
+  });
+  assert.equal((await database.list("events")).length, 0);
+  assert.equal((await database.list("observations")).length, 1);
+});
+
 test("profile quick sets are persisted as canonical preferences", async () => {
   const database = new LocalDatabase(new MemoryStorageAdapter(), "profile-test");
   const store = new CanonicalPrototypeStore(database);

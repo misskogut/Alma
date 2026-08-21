@@ -280,32 +280,8 @@ export function defaultProfile(currentIso = todayIso()): AlmaProfile {
   };
 }
 
-function seededZones(cycleDay: number, profile: AlmaProfile, offset: number): ZoneValues {
-  // This is only a quiet starting contour for an empty prototype. It represents
-  // neither a diagnosis nor a prediction: confirmed personal values replace it.
-  const phase = getCyclePhase(cycleDay, profile);
-  const ovulation = getOvulationDay(profile);
-  const texture = (shift: number) => Math.sin((offset + shift) * .43) * 5;
-  const base: ZoneValues = phase === "menstruation"
-    ? { cognitive: -22, emotional: -14, physical: -26, libido: -35, social: -8 }
-    : phase === "follicular"
-      ? { cognitive: -4, emotional: 2, physical: 4, libido: 7, social: 3 }
-      : phase === "fertile"
-        ? { cognitive: 13, emotional: 11, physical: 12, libido: 26, social: 12 }
-        : phase === "ovulation"
-          ? { cognitive: 21, emotional: 16, physical: 8, libido: 38, social: 16 }
-          : { cognitive: 0, emotional: -4, physical: 0, libido: 1, social: -2 };
-
-  // A small post-ovulation carry-over keeps the default contour fluid rather
-  // than making a false hard biological step at one exact date.
-  const carry = cycleDay > ovulation && cycleDay <= ovulation + 2 ? 9 : 0;
-  return {
-    cognitive: clamp(Math.round(base.cognitive + texture(1.2) + carry)),
-    emotional: clamp(Math.round(base.emotional + texture(.4) + carry * .65)),
-    physical: clamp(Math.round(base.physical + texture(2.1))),
-    libido: clamp(Math.round(base.libido + texture(-.7) + carry)),
-    social: clamp(Math.round(base.social + texture(1.8))),
-  };
+function emptyZones(): ZoneValues {
+  return { cognitive: 0, emotional: 0, physical: 0, libido: 0, social: 0 };
 }
 
 // The integral is deliberately subjective: only cognitive, emotional and libido
@@ -321,7 +297,9 @@ export function buildDayModels(profile: AlmaProfile, stateByDate: Record<string,
     const iso = addDays(currentIso, offset);
     const date = dateFromIso(iso);
     const cycleDay = getCycleDay(iso, profile);
-    const zones = stateByDate[iso] ?? seededZones(cycleDay, profile, offset);
+    // An unknown day stays neutral in the visual projection. The former
+    // prototype contour looked like personal evidence and must never feed Core.
+    const zones = stateByDate[iso] ?? emptyZones();
     return {
       iso,
       date,
@@ -338,10 +316,8 @@ export function buildDayModels(profile: AlmaProfile, stateByDate: Record<string,
   });
 }
 
-export function defaultState(currentIso = todayIso()): Record<string, ZoneValues> {
-  return {
-    [currentIso]: { cognitive: -24, emotional: -8, physical: 18, libido: 34, social: 6 },
-  };
+export function defaultState(_currentIso = todayIso()): Record<string, ZoneValues> {
+  return {};
 }
 
 export function formatShortDate(iso: string) {
