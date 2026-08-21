@@ -1,0 +1,11 @@
+drop index if exists public.alma_v2_experiments_user_status_idx;
+drop index if exists public.alma_v2_personal_tools_user_status_idx;
+drop index if exists public.alma_v2_recommendations_event_idx;
+drop index if exists public.alma_v2_feed_supersedes_idx;
+drop index if exists public.alma_v2_feed_quest_idx;
+drop index if exists public.alma_v2_feed_pattern_idx;
+drop index if exists public.alma_v2_requests_answer_idx;
+drop index if exists public.alma_v2_requests_quest_idx;
+drop index if exists public.alma_v2_patterns_parent_idx;
+drop index if exists public.alma_v2_events_planned_source_idx;
+drop index if exists public.alma_v2_observations_supersedes_idx;

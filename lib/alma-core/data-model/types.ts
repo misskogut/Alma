@@ -170,7 +170,10 @@ export interface CanonicalEvent extends VersionedRecord {
   unit?: string;
   attributes?: Record<string, JsonValue>;
   source: ObservationSource;
-  epistemicStatus: Exclude<EpistemicStatus, "predicted">;
+  epistemicStatus: Extract<
+    EpistemicStatus,
+    "measured" | "user_confirmed" | "inferred"
+  >;
   confidence?: number;
   convertedFromPlannedEventId?: string;
   schemaVersion: number;
@@ -346,4 +349,3 @@ export function assertSignedUnit(value: number, field: string): number {
   }
   return value;
 }
-
