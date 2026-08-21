@@ -6,7 +6,7 @@ const SUPABASE_PUBLISHABLE_KEY = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KE
 
 let browserClient: SupabaseClient | null = null;
 
-function client() {
+export function getBrowserSupabaseClient() {
   if (typeof window === "undefined") return null;
   if (!browserClient) {
     browserClient = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
@@ -18,6 +18,21 @@ function client() {
     });
   }
   return browserClient;
+}
+
+export async function ensureCloudUser() {
+  const supabase = getBrowserSupabaseClient();
+  if (!supabase) throw new Error("Облачная синхронизация доступна только в браузере");
+  const sessionResult = await supabase.auth.getSession();
+  if (sessionResult.error) throw sessionResult.error;
+  let user = sessionResult.data.session?.user ?? null;
+  if (!user) {
+    const anonymousResult = await supabase.auth.signInAnonymously();
+    if (anonymousResult.error) throw anonymousResult.error;
+    user = anonymousResult.data.user;
+  }
+  if (!user) throw new Error("Не удалось создать локальную облачную сессию");
+  return { supabase, user };
 }
 
 function profileToRow(profile: AlmaProfile, userId: string) {
@@ -54,7 +69,7 @@ export type CloudBootstrap = {
 };
 
 export async function bootstrapCloud(defaults: AlmaProfile, fromIso: string, toIso: string): Promise<CloudBootstrap> {
-  const supabase = client();
+  const supabase = getBrowserSupabaseClient();
   if (!supabase) throw new Error("Cloud sync is only available in the browser");
 
   const sessionResult = await supabase.auth.getSession();
@@ -129,7 +144,7 @@ export async function bootstrapCloud(defaults: AlmaProfile, fromIso: string, toI
 }
 
 export async function saveCloudProfile(userId: string, profile: AlmaProfile) {
-  const supabase = client();
+  const supabase = getBrowserSupabaseClient();
   if (!supabase) return false;
   const result = await supabase.from("alma_profiles").upsert(profileToRow(profile, userId), { onConflict: "user_id" });
   if (result.error) throw result.error;
@@ -137,7 +152,7 @@ export async function saveCloudProfile(userId: string, profile: AlmaProfile) {
 }
 
 export async function saveCloudState(userId: string, observedOn: string, values: ZoneValues) {
-  const supabase = client();
+  const supabase = getBrowserSupabaseClient();
   if (!supabase) return false;
   const result = await supabase.from("alma_daily_states").upsert({
     user_id: userId,
@@ -151,7 +166,7 @@ export async function saveCloudState(userId: string, observedOn: string, values:
 }
 
 export async function saveCloudSymptom(userId: string, observedOn: string, symptom: SymptomEntry) {
-  const supabase = client();
+  const supabase = getBrowserSupabaseClient();
   if (!supabase) return false;
   const result = await supabase.from("alma_symptom_entries").upsert({
     user_id: userId,
@@ -169,7 +184,7 @@ export async function saveCloudSymptom(userId: string, observedOn: string, sympt
 }
 
 export async function saveCloudEnvironment(userId: string, environment: EnvironmentPayload) {
-  const supabase = client();
+  const supabase = getBrowserSupabaseClient();
   if (!supabase) return false;
   const current = environment.current;
   const result = await supabase.from("alma_environment_snapshots").upsert({

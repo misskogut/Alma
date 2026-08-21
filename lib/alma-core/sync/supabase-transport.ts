@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
+  CanonicalEntity,
   CanonicalEvent,
   ContextPeriod,
   Observation,
@@ -99,6 +100,13 @@ interface RecordMapping<TRecord extends VersionedRecord = VersionedRecord> {
 }
 
 const mappings: Record<string, RecordMapping> = {
+  entities: {
+    table: "alma_v2_entities",
+    identityColumn: "id",
+    conflictColumn: "id",
+    toRow: entityToRow as RecordMapping["toRow"],
+    fromRow: rowToEntity,
+  },
   profiles: {
     table: "alma_v2_profiles",
     identityColumn: "user_id",
@@ -142,6 +150,32 @@ const mappings: Record<string, RecordMapping> = {
     fromRow: rowToContext,
   },
 };
+
+function entityToRow(record: CanonicalEntity, userId: string): SupabaseRow {
+  return {
+    ...baseRow(record, userId),
+    canonical_key: record.canonicalKey,
+    canonical_label: record.canonicalLabel,
+    user_label: record.userLabel ?? null,
+    kind: record.kind,
+    domain: record.domain,
+    custom: record.custom,
+    registry_version: record.registryVersion,
+  };
+}
+
+function rowToEntity(row: SupabaseRow): CanonicalEntity {
+  return {
+    ...versionedFromRow(row),
+    canonicalKey: String(row.canonical_key),
+    canonicalLabel: String(row.canonical_label),
+    userLabel: optionalString(row.user_label),
+    kind: row.kind as CanonicalEntity["kind"],
+    domain: row.domain as CanonicalEntity["domain"],
+    custom: Boolean(row.custom),
+    registryVersion: String(row.registry_version),
+  };
+}
 
 export function createSupabaseSyncTransport(input: {
   store: SupabaseRecordStore;
