@@ -177,21 +177,27 @@ export default function AlmaPrototype() {
     const store = canonicalStore.current;
     if (!store) return;
     void operation(store)
-      .then(() => runCanonicalSync())
+      .then(async () => {
+        await store.recalculateCurrentModel({ userId: userId ?? undefined });
+        applyProjection(await store.loadProjection(profileRef.current));
+        await runCanonicalSync();
+        applyProjection(await store.loadProjection(profileRef.current));
+      })
       .catch(() => setSyncMode("local"));
-  }, [runCanonicalSync]);
+  }, [applyProjection, runCanonicalSync, userId]);
 
   const persistAndRefresh = useCallback((operation: (store: CanonicalPrototypeStore) => Promise<unknown>) => {
     const store = canonicalStore.current;
     if (!store) return;
     void operation(store)
       .then(async () => {
+        await store.recalculateCurrentModel({ userId: userId ?? undefined });
         applyProjection(await store.loadProjection(profileRef.current));
         await runCanonicalSync();
         applyProjection(await store.loadProjection(profileRef.current));
       })
       .catch(() => setSyncMode("local"));
-  }, [applyProjection, runCanonicalSync]);
+  }, [applyProjection, runCanonicalSync, userId]);
 
   const connectCloud = useCallback(async (fallbackProfile = profileRef.current) => {
     const store = canonicalStore.current;
@@ -221,6 +227,7 @@ export default function AlmaPrototype() {
       canonicalStore.current = store;
       const legacy = parseLegacyPrototypeSnapshot(window.localStorage.getItem(STORAGE_KEY));
       await store.migrateLegacyIfNeeded(legacy);
+      await store.recalculateCurrentModel({ force: true });
       const projection = await store.loadProjection(profileRef.current);
       if (cancelled) return;
       applyProjection(projection);

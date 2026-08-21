@@ -29,6 +29,7 @@ import {
   migrateLegacyLocalSnapshot,
   rankInputRequests,
   rankOutputFeed,
+  recalculatePersonalModel,
   requestsFromQuests,
   synchronize,
 } from "./alma-core";
@@ -43,6 +44,7 @@ import type {
   PersonalPattern,
   PlannedEvent,
   ResearchQuestRecord,
+  AnalysisRunResult,
   SymptomEpisode,
   UserProfileRecord,
   VersionedRecord,
@@ -127,6 +129,10 @@ export class CanonicalPrototypeStore {
   private readonly events: LocalEventRepository;
   private readonly symptoms: LocalSymptomRepository;
   private syncRun: Promise<void> | null = null;
+  private analysisRun: Promise<AnalysisRunResult> | null = null;
+  private analysisRequested = false;
+  private forceAnalysisRequested = false;
+  private analysisUserId: string | undefined;
 
   constructor(readonly database: LocalDatabase) {
     this.observations = new LocalObservationRepository(database);
@@ -362,19 +368,21 @@ export class CanonicalPrototypeStore {
       loadIntensityByDate,
       mainWaveByDate,
       evidenceByDate,
-      patterns: patterns.map((pattern) => ({
-        id: pattern.id,
-        targetDefinitionId: pattern.targetDefinitionId,
-        factorDefinitionIds: pattern.factorDefinitionIds,
-        modifierDefinitionIds: pattern.modifierDefinitionIds,
-        stage: pattern.stage,
-        relationshipType: pattern.relationshipType,
-        evidenceScore: pattern.evidenceScore,
-        direction: pattern.direction,
-        typicalLagMinutes: pattern.typicalLagMinutes,
-        cumulativeWindowDays: pattern.cumulativeWindowDays,
-        lifecycle: pattern.lifecycle,
-      })),
+      patterns: patterns
+        .filter((pattern) => !pattern.validTo && pattern.lifecycle !== "no_longer_observed")
+        .map((pattern) => ({
+          id: pattern.id,
+          targetDefinitionId: pattern.targetDefinitionId,
+          factorDefinitionIds: pattern.factorDefinitionIds,
+          modifierDefinitionIds: pattern.modifierDefinitionIds,
+          stage: pattern.stage,
+          relationshipType: pattern.relationshipType,
+          evidenceScore: pattern.evidenceScore,
+          direction: pattern.direction,
+          typicalLagMinutes: pattern.typicalLagMinutes,
+          cumulativeWindowDays: pattern.cumulativeWindowDays,
+          lifecycle: pattern.lifecycle,
+        })),
       nutritionByDate,
       researchQuests: [...researchQuests].sort((left, right) => researchQuestOrder(left.status) - researchQuestOrder(right.status) || right.updatedAt.localeCompare(left.updatedAt)),
       inputRequests: inputRequests
@@ -819,6 +827,29 @@ export class CanonicalPrototypeStore {
     }
   }
 
+  async recalculateCurrentModel(input: { force?: boolean; userId?: string } = {}) {
+    this.analysisRequested = true;
+    this.forceAnalysisRequested ||= input.force === true;
+    this.analysisUserId = input.userId ?? this.analysisUserId;
+    if (this.analysisRun) return this.analysisRun;
+
+    this.analysisRun = (async () => {
+      let result: AnalysisRunResult | undefined;
+      while (this.analysisRequested) {
+        const force = this.forceAnalysisRequested;
+        const userId = this.analysisUserId;
+        this.analysisRequested = false;
+        this.forceAnalysisRequested = false;
+        result = await recalculatePersonalModel(this.database, { force, userId });
+      }
+      if (!result) throw new Error("Personal model recalculation did not start");
+      return result;
+    })().finally(() => {
+      this.analysisRun = null;
+    });
+    return this.analysisRun;
+  }
+
   async sync(client: SupabaseClient, userId: string) {
     if (this.syncRun) return this.syncRun;
     this.syncRun = (async () => {
@@ -829,6 +860,16 @@ export class CanonicalPrototypeStore {
           userId,
         }),
       );
+      const analysis = await this.recalculateCurrentModel({ userId });
+      if (analysis.changed) {
+        await synchronize(
+          this.database,
+          createSupabaseSyncTransport({
+            store: new SupabaseJsRecordStore(client),
+            userId,
+          }),
+        );
+      }
     })().finally(() => {
       this.syncRun = null;
     });

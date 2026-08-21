@@ -1,12 +1,17 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
+  BaselineRecord,
   CanonicalEntity,
   CanonicalEvent,
   ContextPeriod,
+  DynamicFeature,
   ForecastRecord,
   Observation,
+  PersonalExperimentRecord,
   PersonalPattern,
+  PersonalToolRecord,
   PlannedEvent,
+  RecommendationRecord,
   SymptomEpisode,
   UserProfileRecord,
   VersionedRecord,
@@ -153,6 +158,20 @@ const mappings: Record<string, RecordMapping> = {
     toRow: contextToRow as RecordMapping["toRow"],
     fromRow: rowToContext,
   },
+  baselines: {
+    table: "alma_v2_baselines",
+    identityColumn: "id",
+    conflictColumn: "id",
+    toRow: baselineToRow as RecordMapping["toRow"],
+    fromRow: rowToBaseline,
+  },
+  dynamic_features: {
+    table: "alma_v2_dynamic_features",
+    identityColumn: "id",
+    conflictColumn: "id",
+    toRow: dynamicFeatureToRow as RecordMapping["toRow"],
+    fromRow: rowToDynamicFeature,
+  },
   patterns: {
     table: "alma_v2_patterns",
     identityColumn: "id",
@@ -166,6 +185,27 @@ const mappings: Record<string, RecordMapping> = {
     conflictColumn: "id",
     toRow: forecastToRow as RecordMapping["toRow"],
     fromRow: rowToForecast,
+  },
+  recommendations: {
+    table: "alma_v2_recommendations",
+    identityColumn: "id",
+    conflictColumn: "id",
+    toRow: recommendationToRow as RecordMapping["toRow"],
+    fromRow: rowToRecommendation,
+  },
+  personal_tools: {
+    table: "alma_v2_personal_tools",
+    identityColumn: "id",
+    conflictColumn: "id",
+    toRow: personalToolToRow as RecordMapping["toRow"],
+    fromRow: rowToPersonalTool,
+  },
+  experiments: {
+    table: "alma_v2_experiments",
+    identityColumn: "id",
+    conflictColumn: "id",
+    toRow: experimentToRow as RecordMapping["toRow"],
+    fromRow: rowToExperiment,
   },
   research_quests: {
     table: "alma_v2_research_quests",
@@ -192,6 +232,8 @@ const mappings: Record<string, RecordMapping> = {
 
 const recordTypeAliases: Record<string, keyof typeof mappings> = {
   plannedEvents: "planned_events",
+  dynamicFeatures: "dynamic_features",
+  personalTools: "personal_tools",
 };
 
 function mappingFor(recordType: string) {
@@ -576,6 +618,66 @@ function rowToContext(row: SupabaseRow): ContextPeriod {
   };
 }
 
+function baselineToRow(record: BaselineRecord, userId: string): SupabaseRow {
+  return {
+    ...baseRow(record, userId),
+    definition_id: record.definitionId,
+    kind: record.kind,
+    value: record.value,
+    unit: record.unit ?? null,
+    valid_from: record.validFrom,
+    valid_to: record.validTo ?? null,
+    evidence_count: record.evidenceCount,
+    confidence: record.confidence,
+    algorithm_version: record.algorithmVersion,
+    user_confirmed: record.userConfirmed,
+  };
+}
+
+function rowToBaseline(row: SupabaseRow): BaselineRecord {
+  return {
+    ...versionedFromRow(row),
+    definitionId: String(row.definition_id),
+    kind: row.kind as BaselineRecord["kind"],
+    value: Number(row.value),
+    unit: optionalString(row.unit),
+    validFrom: String(row.valid_from),
+    validTo: optionalString(row.valid_to),
+    evidenceCount: Number(row.evidence_count),
+    confidence: Number(row.confidence),
+    algorithmVersion: String(row.algorithm_version),
+    userConfirmed: Boolean(row.user_confirmed),
+  };
+}
+
+function dynamicFeatureToRow(record: DynamicFeature, userId: string): SupabaseRow {
+  return {
+    ...baseRow(record, userId),
+    definition_id: record.definitionId,
+    local_date: record.localDate,
+    feature_type: record.featureType,
+    value: record.value,
+    window_start: record.windowStart,
+    window_end: record.windowEnd,
+    based_on_observation_ids: record.basedOnObservationIds,
+    algorithm_version: record.algorithmVersion,
+  };
+}
+
+function rowToDynamicFeature(row: SupabaseRow): DynamicFeature {
+  return {
+    ...versionedFromRow(row),
+    definitionId: String(row.definition_id),
+    localDate: String(row.local_date),
+    featureType: row.feature_type as DynamicFeature["featureType"],
+    value: Number(row.value),
+    windowStart: String(row.window_start),
+    windowEnd: String(row.window_end),
+    basedOnObservationIds: stringArray(row.based_on_observation_ids),
+    algorithmVersion: String(row.algorithm_version),
+  };
+}
+
 function patternToRow(record: PersonalPattern, userId: string): SupabaseRow {
   return {
     ...baseRow(record, userId),
@@ -662,6 +764,106 @@ function rowToForecast(row: SupabaseRow): ForecastRecord {
     outcome: row.outcome as ForecastRecord["outcome"],
     resolvedAt: optionalString(row.resolved_at),
     brierScore: optionalNumber(row.brier_score),
+    algorithmVersion: String(row.algorithm_version),
+  };
+}
+
+function recommendationToRow(record: RecommendationRecord, userId: string): SupabaseRow {
+  return {
+    ...baseRow(record, userId),
+    target_definition_id: record.targetDefinitionId,
+    action_definition_id: record.actionDefinitionId,
+    related_pattern_ids: record.relatedPatternIds,
+    expected_benefit: record.expectedBenefit ?? null,
+    controllability: record.controllability ?? null,
+    effort: record.effort ?? null,
+    risk: record.risk ?? null,
+    status: record.status,
+    shown_at: record.shownAt ?? null,
+    performed_event_id: record.performedEventId ?? null,
+    non_medical: record.nonMedical,
+    algorithm_version: record.algorithmVersion,
+  };
+}
+
+function rowToRecommendation(row: SupabaseRow): RecommendationRecord {
+  return {
+    ...versionedFromRow(row),
+    targetDefinitionId: String(row.target_definition_id),
+    actionDefinitionId: String(row.action_definition_id),
+    relatedPatternIds: stringArray(row.related_pattern_ids),
+    expectedBenefit: optionalNumber(row.expected_benefit),
+    controllability: optionalNumber(row.controllability),
+    effort: optionalNumber(row.effort),
+    risk: optionalNumber(row.risk),
+    status: row.status as RecommendationRecord["status"],
+    shownAt: optionalString(row.shown_at),
+    performedEventId: optionalString(row.performed_event_id),
+    nonMedical: true,
+    algorithmVersion: String(row.algorithm_version),
+  };
+}
+
+function personalToolToRow(record: PersonalToolRecord, userId: string): SupabaseRow {
+  return {
+    ...baseRow(record, userId),
+    target_definition_id: record.targetDefinitionId,
+    action_definition_id: record.actionDefinitionId,
+    context_filter: record.contextFilter,
+    test_count: record.testCount,
+    consistency: record.consistency,
+    status: record.status,
+    related_pattern_ids: record.relatedPatternIds,
+    algorithm_version: record.algorithmVersion,
+  };
+}
+
+function rowToPersonalTool(row: SupabaseRow): PersonalToolRecord {
+  return {
+    ...versionedFromRow(row),
+    targetDefinitionId: String(row.target_definition_id),
+    actionDefinitionId: String(row.action_definition_id),
+    contextFilter: (row.context_filter ?? {}) as PersonalToolRecord["contextFilter"],
+    testCount: Number(row.test_count),
+    consistency: Number(row.consistency),
+    status: row.status as PersonalToolRecord["status"],
+    relatedPatternIds: stringArray(row.related_pattern_ids),
+    algorithmVersion: String(row.algorithm_version),
+  };
+}
+
+function experimentToRow(record: PersonalExperimentRecord, userId: string): SupabaseRow {
+  return {
+    ...baseRow(record, userId),
+    hypothesis: record.hypothesis,
+    intervention: record.intervention,
+    target_definition_id: record.targetDefinitionId,
+    period_start: record.periodStart,
+    period_end: record.periodEnd,
+    baseline_window: dateRangeLiteral(record.baselineWindow),
+    observation_window: dateRangeLiteral(record.observationWindow),
+    status: record.status,
+    result: record.result ?? null,
+    evidence: record.evidence,
+    algorithm_version: record.algorithmVersion,
+  };
+}
+
+function rowToExperiment(row: SupabaseRow): PersonalExperimentRecord {
+  return {
+    ...versionedFromRow(row),
+    hypothesis: (row.hypothesis ?? {}) as PersonalExperimentRecord["hypothesis"],
+    intervention: (row.intervention ?? {}) as PersonalExperimentRecord["intervention"],
+    targetDefinitionId: String(row.target_definition_id),
+    periodStart: String(row.period_start),
+    periodEnd: String(row.period_end),
+    baselineWindow: requiredDateRange(row.baseline_window),
+    observationWindow: requiredDateRange(row.observation_window),
+    status: row.status as PersonalExperimentRecord["status"],
+    result: row.result == null
+      ? undefined
+      : row.result as PersonalExperimentRecord["result"],
+    evidence: (row.evidence ?? []) as PersonalExperimentRecord["evidence"],
     algorithmVersion: String(row.algorithm_version),
   };
 }
@@ -845,4 +1047,29 @@ function optionalNumberRange(value: unknown): [number, number] | undefined {
   }
   const [lower, upper] = value.slice(1, -1).split(",").map((part) => Number(part.trim()));
   return Number.isFinite(lower) && Number.isFinite(upper) ? [lower, upper] : undefined;
+}
+
+function dateRangeLiteral(value: [string, string]) {
+  return `[${value[0]},${value[1]}]`;
+}
+
+function requiredDateRange(value: unknown): [string, string] {
+  if (Array.isArray(value) && value.length >= 2) {
+    return [String(value[0]), String(value[1])];
+  }
+  if (typeof value === "string" && value.length >= 5) {
+    const opening = value[0];
+    const closing = value[value.length - 1];
+    if ((opening === "[" || opening === "(") && (closing === "]" || closing === ")")) {
+      const [lower, upper] = value.slice(1, -1).split(",");
+      if (lower && upper) {
+        return [stripRangeQuotes(lower), stripRangeQuotes(upper)];
+      }
+    }
+  }
+  throw new Error("Invalid date range returned by Supabase");
+}
+
+function stripRangeQuotes(value: string) {
+  return value.trim().replace(/^"|"$/g, "");
 }

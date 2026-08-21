@@ -317,6 +317,60 @@ export interface ForecastRecord extends VersionedRecord {
   algorithmVersion: string;
 }
 
+export type RecommendationStatus =
+  | "generated"
+  | "shown"
+  | "opened"
+  | "accepted"
+  | "performed"
+  | "not_performed"
+  | "helped"
+  | "did_not_help";
+
+/**
+ * A non-medical, evidence-bound action suggestion. A recommendation is never
+ * promoted from population or synthetic data and remains separate from facts.
+ */
+export interface RecommendationRecord extends VersionedRecord {
+  targetDefinitionId: string;
+  actionDefinitionId: string;
+  relatedPatternIds: string[];
+  expectedBenefit?: number;
+  controllability?: number;
+  effort?: number;
+  risk?: number;
+  status: RecommendationStatus;
+  shownAt?: string;
+  performedEventId?: string;
+  nonMedical: true;
+  algorithmVersion: string;
+}
+
+export interface PersonalToolRecord extends VersionedRecord {
+  targetDefinitionId: string;
+  actionDefinitionId: string;
+  contextFilter: Record<string, JsonValue>;
+  testCount: number;
+  consistency: number;
+  status: "candidate" | "active" | "weakening" | "retired";
+  relatedPatternIds: string[];
+  algorithmVersion: string;
+}
+
+export interface PersonalExperimentRecord extends VersionedRecord {
+  hypothesis: Record<string, JsonValue>;
+  intervention: Record<string, JsonValue>;
+  targetDefinitionId: string;
+  periodStart: string;
+  periodEnd: string;
+  baselineWindow: [string, string];
+  observationWindow: [string, string];
+  status: "proposed" | "active" | "completed" | "cancelled";
+  result?: Record<string, JsonValue>;
+  evidence: PatternEvidenceItem[];
+  algorithmVersion: string;
+}
+
 export interface UserProfileRecord extends VersionedRecord {
   displayName: string;
   timezone: string;

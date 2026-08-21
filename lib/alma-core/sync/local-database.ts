@@ -155,6 +155,7 @@ export class LocalDatabase {
   async applyRemote<TRecord extends VersionedRecord>(recordType: string, record: TRecord) {
     return this.mutate((state) => {
       const table = state.records[recordType] ?? {};
+      const previous = table[record.id];
       state.records[recordType] = { ...table, [record.id]: record };
       state.sync[syncKey(recordType, record.id)] = {
         recordId: record.id,
@@ -165,6 +166,15 @@ export class LocalDatabase {
         updatedAt: record.updatedAt,
         lastSyncedAt: new Date().toISOString(),
       };
+      if (
+        (!previous || previous.version !== record.version || previous.updatedAt !== record.updatedAt) &&
+        isHistoricalRecordType(recordType)
+      ) {
+        const dirtyRange = remoteDirtyRange(recordType, record);
+        if (dirtyRange) {
+          state.dirtyRanges = mergeDirtyRanges([...state.dirtyRanges, dirtyRange]);
+        }
+      }
       return record;
     });
   }
@@ -227,6 +237,13 @@ export class LocalDatabase {
       const ranges = state.dirtyRanges;
       state.dirtyRanges = [];
       return ranges;
+    });
+  }
+
+  async restoreDirtyRanges(ranges: DirtyDateRange[]) {
+    if (!ranges.length) return;
+    await this.mutate((state) => {
+      state.dirtyRanges = mergeDirtyRanges([...state.dirtyRanges, ...ranges]);
     });
   }
 
@@ -306,4 +323,33 @@ export function mergeDirtyRanges(ranges: DirtyDateRange[]): DirtyDateRange[] {
 
 function syncKey(recordType: string, recordId: string) {
   return `${recordType}:${recordId}`;
+}
+
+function isHistoricalRecordType(recordType: string) {
+  return recordType === "observations" ||
+    recordType === "events" ||
+    recordType === "symptoms" ||
+    recordType === "contexts";
+}
+
+function remoteDirtyRange(
+  recordType: string,
+  record: VersionedRecord,
+): DirtyDateRange | undefined {
+  const value = record as VersionedRecord & {
+    localDate?: string;
+    startedAt?: string;
+  };
+  const localDate = recordType === "contexts"
+    ? value.startedAt?.slice(0, 10)
+    : value.localDate?.slice(0, 10);
+  if (!localDate) return undefined;
+  const end = new Date(`${localDate}T12:00:00.000Z`);
+  end.setUTCDate(end.getUTCDate() + 30);
+  return {
+    from: localDate,
+    to: end.toISOString().slice(0, 10),
+    reason: record.deletedAt ? "delete" : "update",
+    recordIds: [record.id],
+  };
 }

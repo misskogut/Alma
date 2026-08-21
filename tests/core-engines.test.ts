@@ -9,6 +9,7 @@ import {
   computeHabitualBaseline,
   createCalibratableForecast,
   createResearchQuest,
+  derivePersonalActions,
   deriveDynamicFeatures,
   evolvePattern,
   normalizeAgainstBaseline,
@@ -297,6 +298,44 @@ test("forecast records outcomes and calibration instead of decorative percentage
   const calibration = summarizeCalibration([resolved]);
   assert.equal(calibration.count, 1);
   assert.ok(typeof calibration.brierMean === "number");
+});
+
+test("recommendations use only safe controllable actions from personal evidence", () => {
+  const walkingPattern: PersonalPattern = {
+    ...establishedPattern(),
+    id: stableId("pattern", "walking", "overall_wellbeing"),
+    targetDefinitionId: "overall_wellbeing",
+    factorDefinitionIds: ["walking"],
+    direction: "up_up",
+  };
+  const medicationPattern: PersonalPattern = {
+    ...establishedPattern(),
+    id: stableId("pattern", "medication_intake", "overall_wellbeing"),
+    targetDefinitionId: "overall_wellbeing",
+    factorDefinitionIds: ["medication_intake"],
+    direction: "up_up",
+  };
+  const result = derivePersonalActions({
+    patterns: [walkingPattern, medicationPattern],
+    now: "2026-01-20T12:00:00.000Z",
+  });
+  assert.deepEqual(result.recommendations.map((item) => item.actionDefinitionId), ["walking"]);
+  assert.deepEqual(result.tools.map((item) => item.actionDefinitionId), ["walking"]);
+  assert.ok(result.recommendations.every((item) => item.nonMedical));
+
+  const repeatingPattern: PersonalPattern = {
+    ...walkingPattern,
+    stage: "repeating_pattern",
+  };
+  const firstExperiment = derivePersonalActions({
+    patterns: [repeatingPattern],
+    now: "2026-01-20T12:00:00.000Z",
+  }).experiments[0];
+  const laterExperiment = derivePersonalActions({
+    patterns: [repeatingPattern],
+    now: "2026-01-22T12:00:00.000Z",
+  }).experiments[0];
+  assert.equal(firstExperiment.id, laterExperiment.id);
 });
 
 function series(definitionId: string, values: number[]) {

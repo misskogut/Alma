@@ -17,13 +17,18 @@ import {
   supabaseRowToCanonicalRecord,
 } from "../lib/alma-core";
 import type {
+  BaselineRecord,
+  DynamicFeature,
   ForecastRecord,
   InputRequestRecord,
   Observation,
   OutputFeedRecord,
+  PersonalExperimentRecord,
   PersonalPattern,
+  PersonalToolRecord,
   PlannedEvent,
   ResearchQuestRecord,
+  RecommendationRecord,
   StructuredInsight,
   SymptomEpisode,
   SyncTransport,
@@ -415,6 +420,101 @@ test("Supabase mappings round-trip learned, forecast, research and contact recor
   assert.equal(feedRestored.body, feed.body);
   assert.equal(feedRestored.relatedQuestId, quest.id);
   assert.deepEqual(feedRestored.structuredPayload.factorDefinitionIds, ["pressure"]);
+
+  const baseline: BaselineRecord = {
+    ...record("baseline-roundtrip", timestamp),
+    definitionId: "pressure",
+    kind: "habitual",
+    value: 1_012.5,
+    unit: "hPa",
+    validFrom: "2026-08-01",
+    evidenceCount: 18,
+    confidence: 0.81,
+    algorithmVersion: "baseline-test",
+    userConfirmed: false,
+  };
+  const baselineRestored = supabaseRowToCanonicalRecord(
+    "baselines",
+    canonicalRecordToSupabaseRow("baselines", baseline, userId),
+  ) as BaselineRecord;
+  assert.equal(baselineRestored.value, 1_012.5);
+  assert.equal(baselineRestored.evidenceCount, 18);
+
+  const feature: DynamicFeature = {
+    ...record("feature-roundtrip", timestamp),
+    definitionId: "pressure",
+    localDate: "2026-08-21",
+    featureType: "deviation_from_baseline",
+    value: -0.42,
+    windowStart: "2026-08-21T00:00:00.000Z",
+    windowEnd: "2026-08-21T23:59:59.999Z",
+    basedOnObservationIds: ["00000000-0000-4000-a000-000000000010"],
+    algorithmVersion: "feature-test",
+  };
+  const featureRestored = supabaseRowToCanonicalRecord(
+    "dynamicFeatures",
+    canonicalRecordToSupabaseRow("dynamicFeatures", feature, userId),
+  ) as DynamicFeature;
+  assert.equal(featureRestored.featureType, "deviation_from_baseline");
+  assert.deepEqual(featureRestored.basedOnObservationIds, feature.basedOnObservationIds);
+
+  const recommendation: RecommendationRecord = {
+    ...record("recommendation-roundtrip", timestamp),
+    targetDefinitionId: "overall_wellbeing",
+    actionDefinitionId: "walking",
+    relatedPatternIds: [pattern.id],
+    expectedBenefit: 0.62,
+    controllability: 0.9,
+    effort: 0.25,
+    risk: 0.05,
+    status: "accepted",
+    nonMedical: true,
+    algorithmVersion: "recommendation-test",
+  };
+  const recommendationRestored = supabaseRowToCanonicalRecord(
+    "recommendations",
+    canonicalRecordToSupabaseRow("recommendations", recommendation, userId),
+  ) as RecommendationRecord;
+  assert.equal(recommendationRestored.status, "accepted");
+  assert.equal(recommendationRestored.actionDefinitionId, "walking");
+
+  const tool: PersonalToolRecord = {
+    ...record("tool-roundtrip", timestamp),
+    targetDefinitionId: "overall_wellbeing",
+    actionDefinitionId: "walking",
+    contextFilter: { modifierDefinitionIds: ["sleep_duration"] },
+    testCount: 14,
+    consistency: 0.78,
+    status: "active",
+    relatedPatternIds: [pattern.id],
+    algorithmVersion: "tool-test",
+  };
+  const toolRestored = supabaseRowToCanonicalRecord(
+    "personalTools",
+    canonicalRecordToSupabaseRow("personalTools", tool, userId),
+  ) as PersonalToolRecord;
+  assert.equal(toolRestored.status, "active");
+  assert.deepEqual(toolRestored.contextFilter, tool.contextFilter);
+
+  const experiment: PersonalExperimentRecord = {
+    ...record("experiment-roundtrip", timestamp),
+    hypothesis: { factorDefinitionIds: ["walking"], relatedPatternId: pattern.id },
+    intervention: { actionDefinitionId: "walking", nonMedical: true },
+    targetDefinitionId: "overall_wellbeing",
+    periodStart: "2026-08-22",
+    periodEnd: "2026-08-28",
+    baselineWindow: ["2026-08-15", "2026-08-21"],
+    observationWindow: ["2026-08-22", "2026-08-28"],
+    status: "proposed",
+    evidence: [],
+    algorithmVersion: "experiment-test",
+  };
+  const experimentRestored = supabaseRowToCanonicalRecord(
+    "experiments",
+    canonicalRecordToSupabaseRow("experiments", experiment, userId),
+  ) as PersonalExperimentRecord;
+  assert.deepEqual(experimentRestored.baselineWindow, experiment.baselineWindow);
+  assert.deepEqual(experimentRestored.observationWindow, experiment.observationWindow);
 });
 
 function record(id: string, updatedAt = "2026-08-21T00:00:00.000Z"): VersionedRecord {
