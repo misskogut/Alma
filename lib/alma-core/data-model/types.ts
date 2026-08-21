@@ -317,6 +317,30 @@ export interface ForecastRecord extends VersionedRecord {
   algorithmVersion: string;
 }
 
+export interface UserProfileRecord extends VersionedRecord {
+  displayName: string;
+  timezone: string;
+  preferences: Record<string, JsonValue>;
+  locationPrivacy: "off" | "approximate" | "precise";
+  populationOptIn: boolean;
+  schemaVersion: number;
+}
+
+/**
+ * Safe holding area for legacy values whose semantics cannot be recovered.
+ * These records never participate in evidence until the person classifies them.
+ */
+export interface LegacyUnclassifiedRecord extends VersionedRecord {
+  legacySource: string;
+  legacyTable?: string;
+  legacyRecordKey?: string;
+  rawPayload: JsonValue;
+  reason: string;
+  classificationStatus: "pending" | "classified" | "discarded";
+  classifiedEntityDefinitionId?: string;
+  schemaVersion: number;
+}
+
 export interface SyncMetadata {
   recordId: string;
   recordType: string;
