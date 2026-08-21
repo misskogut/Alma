@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "incremental": false,
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "outDir": ".test-dist",
+    "rootDir": ".",
+    "plugins": []
+  },
+  "include": ["lib/alma-core/**/*.ts", "tests/**/*.ts"],
+  "exclude": ["node_modules", ".next"]
+}
