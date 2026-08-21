@@ -6,7 +6,7 @@ import { bodySilhouetteAsset } from "../lib/visual-assets";
 import { controlAssets } from "../lib/control-assets";
 
 type ActiveControl = "cognitive" | "emotional" | "libido";
-type Props = { values: ZoneValues; symptoms: SymptomEntry[]; symptomHistory: SymptomEntry[]; activeZone: ZoneKey | null; onSelect: (zone: ZoneKey) => void; onBeginAdjustment: (zone: ZoneKey) => void; onChange: (zone: ZoneKey, value: number) => void; onCommit: () => void; onAddQuickSymptom: (symptom: SymptomEntry) => void; onUpdateQuickSymptom: (symptom: SymptomEntry) => void; };
+type Props = { values: ZoneValues; loadIntensities: Partial<Record<"cognitive" | "emotional", number>>; symptoms: SymptomEntry[]; symptomHistory: SymptomEntry[]; activeZone: ZoneKey | null; onSelect: (zone: ZoneKey) => void; onBeginAdjustment: (zone: ZoneKey) => void; onChange: (zone: ZoneKey, value: number) => void; onCommit: () => void; onChangeLoadIntensity: (zone: "cognitive" | "emotional", value: number) => void; onCommitLoadIntensity: (zone: "cognitive" | "emotional") => void; onAddQuickSymptom: (symptom: SymptomEntry) => void; onUpdateQuickSymptom: (symptom: SymptomEntry) => void; };
 
 const zones: ActiveControl[] = ["cognitive", "emotional", "libido"];
 type Band = "negativeLight" | "negativeMedium" | "negativeHigh" | "positiveLight" | "positiveMedium" | "positiveHigh";
@@ -78,7 +78,7 @@ const describeRange = (value: number) => {
 };
 const getBand = (value: number): Band => value <= -67 ? "negativeHigh" : value <= -34 ? "negativeMedium" : value < 0 ? "negativeLight" : value <= 33 ? "positiveLight" : value <= 66 ? "positiveMedium" : "positiveHigh";
 
-export default function BodyCheckin({ values, symptoms: confirmedSymptoms, symptomHistory, activeZone: _activeZone, onSelect, onBeginAdjustment, onChange, onCommit, onAddQuickSymptom, onUpdateQuickSymptom }: Props) {
+export default function BodyCheckin({ values, loadIntensities, symptoms: confirmedSymptoms, symptomHistory, activeZone: _activeZone, onSelect, onBeginAdjustment, onChange, onCommit, onChangeLoadIntensity, onCommitLoadIntensity, onAddQuickSymptom, onUpdateQuickSymptom }: Props) {
   const [openControl, setOpenControl] = useState<ActiveControl | null>(null);
   const [holding, setHolding] = useState(false);
   const [detailZone, setDetailZone] = useState<ActiveControl | null>(null);
@@ -237,7 +237,7 @@ export default function BodyCheckin({ values, symptoms: confirmedSymptoms, sympt
         <p>У каждой стороны три равных диапазона: лёгкая, средняя и высокая нагрузка. После отпускания можно выбрать подходящее ощущение или добавить своё.</p>
         <p>Если снова передвинуть ту же кнопку, прошлый набор ощущений этой зоны заменится новым — в отчёте останется актуальная настройка.</p>
       </aside>}
-      {detailZone && <aside className="control-detail-popover" onPointerDown={(event) => event.stopPropagation()}><button type="button" aria-label="Закрыть" onClick={() => setDetailZone(null)}>×</button><p className="eyebrow">{ZONE_META[detailZone].label}</p><strong>{describeRange(detailValue)} · {formatValue(detailValue)}</strong><small>{selectedSymptoms.length ? <>Выбрано: {selectedSymptoms.map((symptom) => symptom.label).join(" · ")}</> : "Симптомы пока не выбраны"}</small></aside>}
+      {detailZone && <aside className="control-detail-popover" onPointerDown={(event) => event.stopPropagation()}><button type="button" aria-label="Закрыть" onClick={() => setDetailZone(null)}>×</button><p className="eyebrow">{ZONE_META[detailZone].label}</p><strong>{describeRange(detailValue)} · {formatValue(detailValue)}</strong>{detailZone !== "libido" && <label className="detail-load-intensity"><span>Сколько нагрузки было?</span><input type="range" min="0" max="100" value={loadIntensities[detailZone] ?? 0} onChange={(event) => onChangeLoadIntensity(detailZone, Number(event.target.value))} onPointerUp={() => onCommitLoadIntensity(detailZone)} onKeyUp={() => onCommitLoadIntensity(detailZone)} /><b>{loadIntensities[detailZone] == null ? "не отмечено" : `${loadIntensities[detailZone]}%`}</b></label>}<small>{selectedSymptoms.length ? <>Выбрано: {selectedSymptoms.map((symptom) => symptom.label).join(" · ")}</> : "Ощущения пока не выбраны"}</small></aside>}
       {openControl && !holding && !detailZone && <div className={`floating-symptoms ${symptomSide} ${openControl}`} style={{ "--zone-color": ZONE_META[openControl].color } as CSSProperties} aria-label="Подходящие ощущения">
         {symptoms.map((label, index) => { const [left, top] = symptomPositions[openControl][symptomSide][index]; const selected = confirmedSymptoms.some((symptom) => symptom.zone === openControl && symptom.status === "confirmed" && symptom.label === label); return <button key={label} className={selected ? "is-selected" : ""} type="button" style={{ left: `${left}%`, top: `${top}%`, "--delay": `${index * -.7}s` } as CSSProperties} onPointerDown={(event) => event.stopPropagation()} onClick={() => chooseSymptom(label, index)}>{label}</button>; })}
         {(() => { const [left, top] = symptomPositions[openControl][symptomSide][4]; return <button className="more-symptom-trigger" type="button" style={{ left: `${left}%`, top: `${top}%`, "--delay": "-1.8s" } as CSSProperties} onPointerDown={(event) => event.stopPropagation()} onClick={() => { setCatalogQuery(""); setMoreOpen(true); }}>＋ ещё</button>; })()}

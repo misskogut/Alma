@@ -5,13 +5,14 @@ import BodyCheckin from "../components/body-checkin";
 import ActivityPanel from "../components/activity-panel";
 import CycleHero from "../components/cycle-hero";
 import EnvironmentPanel, { ContextStrip } from "../components/environment-panel";
+import OverallWellbeing from "../components/overall-wellbeing";
 import { ConnectionsSheet, CycleSettingsSheet, DaySheet } from "../components/sheets";
 import SymptomCheck from "../components/symptom-check";
 import WaveChart from "../components/wave-chart";
 import VoiceCheckinSheet, { type VoiceDraft } from "../components/voice-checkin";
-import type { AlmaProfile, ContextKey, EnvironmentPayload, SymptomEntry, SyncMode, WaveLayerKey, ZoneKey, ZoneValues } from "../lib/alma";
-import { DEFAULT_SYMPTOMS, TIMELINE_RADIUS, buildDayModels, defaultProfile, formatShortDate, phaseLabel, relativeDayLabel, todayIso } from "../lib/alma";
-import { immediateInputFeedback } from "../lib/alma-core";
+import type { AlmaProfile, ContextKey, DayEvidence, EnvironmentPayload, MainWaveDatum, PatternSummary, SymptomEntry, SyncMode, WaveLayerKey, ZoneKey, ZoneValues } from "../lib/alma";
+import { DEFAULT_SYMPTOMS, TIMELINE_RADIUS, buildDayModels, defaultProfile, formatShortDate, relativeDayLabel, todayIso } from "../lib/alma";
+import { immediateInputFeedback, metricDefinition } from "../lib/alma-core";
 import { CanonicalPrototypeStore, createBrowserCanonicalStore, parseLegacyPrototypeSnapshot, type PrototypeProjection } from "../lib/canonical-prototype-store";
 import { ensureCloudUser } from "../lib/supabase";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -39,13 +40,14 @@ function withCurrentSuggestions(entries: Record<string, SymptomEntry[]>, current
 function insightFor(
   day: ReturnType<typeof buildDayModels>[number],
   symptomsByDate: Record<string, SymptomEntry[]>,
-  environment: EnvironmentPayload | null,
   hasPersonalState: boolean,
 ) {
+  if (day.isForecast && day.integralStatus === "predicted" && day.integral != null) {
+    return { kicker: "персональный прогноз", title: `${relativeDayLabel(day.iso)} · ${day.integral > 0 ? "+" : ""}${day.integral}`, body: "Это вероятный ориентир из сохранённого прогноза ALMA, а не факт. Когда день наступит, система предложит подтвердить, что произошло на самом деле.", tone: "forecast" };
+  }
+
   if (day.isForecast) {
-    const external = environment?.days.find((item) => item.date === day.iso);
-    const condition = external?.pressureHpa != null ? `давление около ${Math.round(external.pressureHpa * 0.750062)} мм` : "внешний фон ещё уточняется";
-    return { kicker: "мягкий ориентир", title: `${relativeDayLabel(day.iso)} · ${phaseLabel(day.phase).toLowerCase()}`, body: `Завтра ожидается ${condition}. Это только фон дня: когда он наступит, можно будет отметить, как ты себя чувствовала на самом деле.`, tone: "forecast" };
+    return { kicker: "день ещё впереди", title: "Персонального прогноза пока нет", body: "ALMA не дорисовывает будущее без достаточных персональных оснований. Автоматический фон можно посмотреть отдельно, но он не считается твоим будущим состоянием.", tone: "forecast" };
   }
 
   const confirmed = symptomsByDate[day.iso]?.filter((symptom) => symptom.status === "confirmed") ?? [];
@@ -65,6 +67,10 @@ export default function AlmaPrototype() {
   const currentIso = useMemo(() => todayIso(), []);
   const [profile, setProfile] = useState<AlmaProfile>(() => defaultProfile(currentIso));
   const [stateByDate, setStateByDate] = useState<Record<string, ZoneValues>>({});
+  const [loadIntensityByDate, setLoadIntensityByDate] = useState<PrototypeProjection["loadIntensityByDate"]>({});
+  const [mainWaveByDate, setMainWaveByDate] = useState<Record<string, MainWaveDatum>>({});
+  const [evidenceByDate, setEvidenceByDate] = useState<Record<string, DayEvidence>>({});
+  const [patterns, setPatterns] = useState<PatternSummary[]>([]);
   const [symptomsByDate, setSymptomsByDate] = useState<Record<string, SymptomEntry[]>>(() => ({ [currentIso]: cloneSuggestions() }));
   const [activeIndex, setActiveIndex] = useState(TODAY_INDEX);
   const [activeZone, setActiveZone] = useState<ZoneKey | null>(null);
@@ -82,6 +88,7 @@ export default function AlmaPrototype() {
   const [daySheetOpen, setDaySheetOpen] = useState(false);
   const [connectionsOpen, setConnectionsOpen] = useState(false);
   const [voiceCheckinOpen, setVoiceCheckinOpen] = useState(false);
+  const [selectedTimelineDefinitionId, setSelectedTimelineDefinitionId] = useState<string | null>(null);
   const pendingValues = useRef<ZoneValues | null>(null);
   const pendingZone = useRef<ZoneKey | null>(null);
   const canonicalStore = useRef<CanonicalPrototypeStore | null>(null);
@@ -91,18 +98,43 @@ export default function AlmaPrototype() {
   const bootStarted = useRef(false);
   const profileRef = useRef(profile);
 
-  const days = useMemo(() => buildDayModels(profile, stateByDate, currentIso), [profile, stateByDate, currentIso]);
+  const days = useMemo(() => buildDayModels(profile, stateByDate, currentIso, TIMELINE_RADIUS, {
+    mainWaveByDate,
+    evidenceByDate,
+    cycleProfileConfirmed: hasStoredProfile,
+  }), [profile, stateByDate, currentIso, mainWaveByDate, evidenceByDate, hasStoredProfile]);
   const activeDay = days[activeIndex];
   const activeSymptoms = symptomsByDate[activeDay.iso] ?? [];
   const symptomHistory = useMemo(() => Object.values(symptomsByDate).flat(), [symptomsByDate]);
   const confirmedCount = activeSymptoms.filter((symptom) => symptom.status === "confirmed").length;
-  const insight = insightFor(activeDay, symptomsByDate, environment, Boolean(stateByDate[activeDay.iso]));
+  const insight = insightFor(activeDay, symptomsByDate, Boolean(stateByDate[activeDay.iso]));
+  const selectedMarker = useMemo(() => selectedTimelineDefinitionId
+    ? days.flatMap((day) => day.evidence.markers).find((marker) => marker.definitionId === selectedTimelineDefinitionId)
+    : undefined, [days, selectedTimelineDefinitionId]);
+  const relationshipFilter = useMemo(() => {
+    const established = new Set<string>();
+    const hypothesized = new Set<string>();
+    if (!selectedTimelineDefinitionId) return { established, hypothesized };
+    for (const pattern of patterns) {
+      const definitions = new Set([pattern.targetDefinitionId, ...pattern.factorDefinitionIds, ...pattern.modifierDefinitionIds]);
+      if (!definitions.has(selectedTimelineDefinitionId)) continue;
+      const target = pattern.stage === "established_personal_pattern" ? established : hypothesized;
+      definitions.forEach((definitionId) => {
+        if (definitionId !== selectedTimelineDefinitionId) target.add(definitionId);
+      });
+    }
+    return { established, hypothesized };
+  }, [patterns, selectedTimelineDefinitionId]);
 
   const applyProjection = useCallback((projection: PrototypeProjection) => {
     profileRef.current = projection.profile;
     setProfile(projection.profile);
     setHasStoredProfile(projection.hasStoredProfile);
     setStateByDate(projection.states);
+    setLoadIntensityByDate(projection.loadIntensityByDate);
+    setMainWaveByDate(projection.mainWaveByDate);
+    setEvidenceByDate(projection.evidenceByDate);
+    setPatterns(projection.patterns);
     setSymptomsByDate(withCurrentSuggestions(projection.entries, currentIso));
   }, [currentIso]);
 
@@ -260,6 +292,34 @@ export default function AlmaPrototype() {
     }));
   }
 
+  function changeLoadIntensity(zone: Exclude<ZoneKey, "libido">, value: number) {
+    setLoadIntensityByDate((current) => ({
+      ...current,
+      [activeDay.iso]: { ...(current[activeDay.iso] ?? {}), [zone]: value },
+    }));
+  }
+
+  function commitLoadIntensity(zone: Exclude<ZoneKey, "libido">) {
+    const value = loadIntensityByDate[activeDay.iso]?.[zone];
+    if (value == null) return;
+    persistCanonical((store) => store.saveLoadIntensity({ localDate: activeDay.iso, zone, value, userId: userId ?? undefined }));
+  }
+
+  function saveOverallWellbeing(value: number) {
+    const hadFactualAnchor = mainWaveByDate[activeDay.iso]?.status === "user_confirmed";
+    setMainWaveByDate((current) => ({
+      ...current,
+      [activeDay.iso]: { value: value / 100, status: "user_confirmed", dailyMin: value / 100, dailyMax: value / 100 },
+    }));
+    if (!hadFactualAnchor) {
+      setEvidenceByDate((current) => {
+        const existing = current[activeDay.iso] ?? { factualCount: 0, inferredCount: 0, plannedCount: 0, predictedCount: 0, markers: [] };
+        return { ...current, [activeDay.iso]: { ...existing, factualCount: existing.factualCount + 1 } };
+      });
+    }
+    persistCanonical((store) => store.saveOverallWellbeing({ localDate: activeDay.iso, value, userId: userId ?? undefined }));
+  }
+
   function updateSymptom(symptom: SymptomEntry) {
     setSymptomsByDate((current) => {
       const list = current[activeDay.iso] ?? [];
@@ -304,7 +364,13 @@ export default function AlmaPrototype() {
   }
 
   function saveProfile(next: AlmaProfile, focusIso?: string) {
-    persistProfile(next);
+    profileRef.current = next;
+    setProfile(next);
+    setHasStoredProfile(true);
+    persistCanonical(async (store) => {
+      await store.saveProfile(next, userId ?? undefined);
+      if (focusIso) await store.recordMenstruationInterval({ startDate: focusIso, durationDays: next.periodLength, userId: userId ?? undefined });
+    });
     if (focusIso) {
       const focusIndex = days.findIndex((item) => item.iso === focusIso);
       if (focusIndex >= 0) setActiveIndex(focusIndex);
@@ -376,15 +442,17 @@ export default function AlmaPrototype() {
 
       <CycleHero profile={profile} days={days} activeIndex={activeIndex} quickAccessLabels={profile.cycleQuickAccessActions ?? (profile.cycleActions ?? ["Контрацептив", "Секс", "Тест на овуляцию"]).slice(0, 3)} quickActionLabels={profile.cycleActions ?? ["Контрацептив", "Секс", "Тест на овуляцию"]} selectedQuickActionLabels={activeSymptoms.filter((item) => item.zone === "general" && item.status === "confirmed").map((item) => item.label)} onToggleQuickAccess={(label) => toggleQuickAction({ label })} onUpdateQuickAccess={updateCycleQuickAccess} onSelectDay={selectDay} onOpenPeriod={() => setCycleSettingsOpen(true)} />
 
-      {!activeDay.isForecast && <ActivityPanel actions={(profile.quickActions ?? []).filter((label) => !["Контрацептив", "Секс", "Мастурбация", "Тест на овуляцию"].includes(label))} catalog={profile.actionCatalog} selected={activeSymptoms.filter((item) => item.zone === "general" && item.status === "confirmed").map((item) => item.label)} values={activeDay.zones} symptoms={activeSymptoms} onToggle={(label) => toggleQuickAction({ label })} onUpdate={updateActivityActions} onChange={changeZone} onCommit={commitState} onAddSymptom={addSymptom} onUpdateSymptom={updateSymptom} />}
+      {!activeDay.isForecast && <ActivityPanel actions={(profile.quickActions ?? []).filter((label) => !["Контрацептив", "Секс", "Мастурбация", "Тест на овуляцию"].includes(label))} catalog={profile.actionCatalog} selected={activeSymptoms.filter((item) => item.zone === "general" && item.status === "confirmed").map((item) => item.label)} values={activeDay.zones} loadIntensities={loadIntensityByDate[activeDay.iso] ?? {}} symptoms={activeSymptoms} onToggle={(label) => toggleQuickAction({ label })} onUpdate={updateActivityActions} onChange={changeZone} onCommit={commitState} onChangeLoadIntensity={changeLoadIntensity} onCommitLoadIntensity={commitLoadIntensity} onAddSymptom={addSymptom} onUpdateSymptom={updateSymptom} />}
 
-      {!activeDay.isForecast ? <BodyCheckin values={activeDay.zones} symptoms={activeSymptoms} symptomHistory={symptomHistory} activeZone={activeZone} onSelect={setActiveZone} onBeginAdjustment={beginZoneAdjustment} onChange={changeZone} onCommit={commitState} onAddQuickSymptom={addSymptom} onUpdateQuickSymptom={updateSymptom} /> : <section className="forecast-card glass-card"><span>∿</span><div><p className="eyebrow">сначала прожить день</p><h2>Это мягкий ориентир</h2><p>День ещё впереди. Посмотри на фон, а когда он наступит — отметь, как тебе было на самом деле.</p></div></section>}
+      {!activeDay.isForecast ? <BodyCheckin values={activeDay.zones} loadIntensities={loadIntensityByDate[activeDay.iso] ?? {}} symptoms={activeSymptoms} symptomHistory={symptomHistory} activeZone={activeZone} onSelect={setActiveZone} onBeginAdjustment={beginZoneAdjustment} onChange={changeZone} onCommit={commitState} onChangeLoadIntensity={changeLoadIntensity} onCommitLoadIntensity={commitLoadIntensity} onAddQuickSymptom={addSymptom} onUpdateQuickSymptom={updateSymptom} /> : <section className="forecast-card glass-card"><span>∿</span><div><p className="eyebrow">{activeDay.integralStatus === "predicted" ? "персональный прогноз" : "день ещё впереди"}</p><h2>{activeDay.integralStatus === "predicted" ? "Вероятный ориентир" : "Прогноз пока не сформирован"}</h2><p>{activeDay.integralStatus === "predicted" ? "Это сохранённый прогноз, а не факт. После этого дня ALMA проверит, совпал ли он с реальностью." : "ALMA не дорисовывает состояние без достаточных персональных оснований."}</p></div></section>}
 
       <section className="wave-section" aria-labelledby="wave-title">
         <header className="wave-section-header">
           <div><p className="eyebrow">{relativeDayLabel(activeDay.iso)} · {formatShortDate(activeDay.iso)}</p><h2 id="wave-title">Субъективная волна</h2></div>
         </header>
-        <WaveChart days={days} activeIndex={activeIndex} activeContexts={activeContexts} internalWaves={internalWaves} activeLayers={activeLayers} environment={environment} deviceSignals={null} confirmedCount={confirmedCount} onSelectDay={selectDay} onOpenDay={openDay} />
+        {!activeDay.isForecast && <OverallWellbeing value={activeDay.integral} status={activeDay.integralStatus} onSave={saveOverallWellbeing} />}
+        {selectedTimelineDefinitionId && <div className="wave-focus-banner"><span><small>смотрим историю</small><b>{selectedMarker?.label ?? metricDefinition(selectedTimelineDefinitionId)?.label ?? "Выбранное событие"}</b></span><button type="button" onClick={() => setSelectedTimelineDefinitionId(null)}>показать всё ×</button></div>}
+        <WaveChart days={days} activeIndex={activeIndex} activeContexts={activeContexts} internalWaves={internalWaves} activeLayers={activeLayers} environment={environment} deviceSignals={null} confirmedCount={confirmedCount} selectedDefinitionId={selectedTimelineDefinitionId} establishedDefinitionIds={relationshipFilter.established} hypothesizedDefinitionIds={relationshipFilter.hypothesized} onSelectMarker={setSelectedTimelineDefinitionId} onSelectDay={selectDay} onOpenDay={openDay} />
       </section>
 
       <ContextStrip environment={environment} activeContexts={activeContexts} internalWaves={internalWaves} activeLayers={activeLayers} onToggleContext={toggleContext} onToggleInternal={toggleInternalWave} onToggleLayer={toggleLayer} />
@@ -410,7 +478,7 @@ export default function AlmaPrototype() {
     <button className="floating-voice-trigger" type="button" onClick={() => setVoiceCheckinOpen(true)} aria-label="Рассказать о дне голосом"><svg viewBox="0 0 48 48" aria-hidden="true"><defs><linearGradient id="fixed-voice-rainbow" x1="8" y1="8" x2="40" y2="40"><stop stopColor="#6ce8ff"/><stop offset=".34" stopColor="#a979ff"/><stop offset=".68" stopColor="#ff83c9"/><stop offset="1" stopColor="#ffd176"/></linearGradient></defs><rect x="17" y="7" width="14" height="23" rx="7"/><path d="M12 24a12 12 0 0 0 24 0M24 36v6M17 42h14"/></svg><span>рассказать</span></button>
     {cycleSettingsOpen && <CycleSettingsSheet profile={profile} activeIso={activeDay.iso} selectedActionLabels={activeSymptoms.filter((item) => item.zone === "general" && item.status === "confirmed").map((item) => item.label)} onSave={saveProfile} onToggleQuickAction={toggleQuickAction} onUpdateQuickActions={updateCycleActions} onUpdateQuickAccess={updateCycleQuickAccess} onClose={() => setCycleSettingsOpen(false)} />}
     {daySheetOpen && <DaySheet day={activeDay} environment={environment} symptoms={activeSymptoms} activeContexts={activeContexts} internalWaves={internalWaves} activeLayers={activeLayers} deviceSignals={null} onClose={() => setDaySheetOpen(false)} />}
-    {connectionsOpen && <ConnectionsSheet day={activeDay} days={days} environment={environment} onClose={() => setConnectionsOpen(false)} />}
+    {connectionsOpen && <ConnectionsSheet day={activeDay} patterns={patterns} selectedDefinitionId={selectedTimelineDefinitionId} onSelectDefinition={(definitionId) => { setSelectedTimelineDefinitionId(definitionId); setConnectionsOpen(false); }} onClose={() => setConnectionsOpen(false)} />}
     {voiceCheckinOpen && <VoiceCheckinSheet actionLabels={Array.from(new Set([...(profile.cycleActions ?? ["Контрацептив", "Секс", "Мастурбация", "Тест на овуляцию"]), ...(profile.quickActions ?? ["Йога", "Тренировка", "Прогулка", "Путешествие"])]))} onConfirm={applyVoiceDraft} onClose={() => setVoiceCheckinOpen(false)} />}
   </main>;
 }

@@ -1,8 +1,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   AlmaProfile,
+  DayEvidence,
   EnvironmentPayload,
+  MainWaveDatum,
+  PatternSummary,
   SymptomEntry,
+  TimelineMarker,
   ZoneKey,
   ZoneValues,
 } from "./alma";
@@ -24,8 +28,11 @@ import {
 import type {
   CanonicalEntity,
   CanonicalEvent,
+  ForecastRecord,
   JsonValue,
   Observation,
+  PersonalPattern,
+  PlannedEvent,
   SymptomEpisode,
   UserProfileRecord,
   VersionedRecord,
@@ -47,6 +54,17 @@ const DEFINITION_ZONE = Object.fromEntries(
   Object.entries(ZONE_DEFINITION).map(([zone, definition]) => [definition, zone]),
 ) as Record<string, ZoneKey>;
 
+const LOAD_INTENSITY_ZONE: Record<string, Exclude<ZoneKey, "libido">> = {
+  cognitive_load_intensity: "cognitive",
+  emotional_load_intensity: "emotional",
+  physical_load_intensity: "physical",
+  social_load_intensity: "social",
+};
+
+const ZONE_INTENSITY_DEFINITION = Object.fromEntries(
+  Object.entries(LOAD_INTENSITY_ZONE).map(([definitionId, zone]) => [zone, definitionId]),
+) as Record<Exclude<ZoneKey, "libido">, string>;
+
 const ACTION_DEFINITIONS: Record<string, string> = {
   "йога": "yoga",
   "тренировка": "workout",
@@ -64,6 +82,10 @@ export interface PrototypeProjection {
   profile: AlmaProfile;
   hasStoredProfile: boolean;
   states: Record<string, ZoneValues>;
+  loadIntensityByDate: Record<string, Partial<Record<Exclude<ZoneKey, "libido">, number>>>;
+  mainWaveByDate: Record<string, MainWaveDatum>;
+  evidenceByDate: Record<string, DayEvidence>;
+  patterns: PatternSummary[];
   entries: Record<string, SymptomEntry[]>;
 }
 
@@ -108,25 +130,70 @@ export class CanonicalPrototypeStore {
   }
 
   async loadProjection(fallbackProfile: AlmaProfile): Promise<PrototypeProjection> {
-    const [profiles, observations, symptoms, events, entities] = await Promise.all([
+    const [profiles, observations, symptoms, events, entities, plannedEvents, forecasts, patterns] = await Promise.all([
       this.database.list<UserProfileRecord>("profiles"),
       this.observations.listCanonical(),
       this.symptoms.list(),
       this.events.list(),
       this.database.list<CanonicalEntity>("entities"),
+      this.database.list<PlannedEvent>("planned_events"),
+      this.database.list<ForecastRecord>("forecasts"),
+      this.database.list<PersonalPattern>("patterns"),
     ]);
     const profile = profiles
       .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
       .at(0);
     const states: Record<string, ZoneValues> = {};
+    const loadIntensityByDate: PrototypeProjection["loadIntensityByDate"] = {};
+    const mainWaveByDate: Record<string, MainWaveDatum> = {};
+    const mainWaveRecordedAt = new Map<string, string>();
+    const latestObservationAt = new Map<string, string>();
+    const evidenceByDate: Record<string, DayEvidence> = {};
     const entries: Record<string, SymptomEntry[]> = {};
     const entityLabels = new Map(
       entities.map((entity) => [entity.canonicalKey, entity.userLabel ?? entity.canonicalLabel]),
     );
 
     for (const observation of observations) {
+      addEvidence(evidenceByDate, observation.localDate, observation.epistemicStatus);
+      if (
+        observation.definitionId === "overall_wellbeing"
+        && typeof observation.value === "number"
+        && (observation.epistemicStatus === "user_confirmed" || observation.epistemicStatus === "inferred")
+      ) {
+        const existing = mainWaveByDate[observation.localDate];
+        const value = clampSigned(observation.value);
+        const status = observation.epistemicStatus === "inferred" ? "inferred" : "user_confirmed";
+        const recordedAt = observation.recordedAt || observation.updatedAt;
+        const previousRecordedAt = mainWaveRecordedAt.get(observation.localDate);
+        const shouldBecomeAnchor = !existing
+          || (existing.status === "inferred" && status === "user_confirmed")
+          || (existing.status === status && (!previousRecordedAt || recordedAt >= previousRecordedAt));
+        mainWaveByDate[observation.localDate] = {
+          value: shouldBecomeAnchor ? value : existing.value,
+          status: shouldBecomeAnchor ? status : existing.status,
+          dailyMin: existing?.dailyMin == null ? value : Math.min(existing.dailyMin, value),
+          dailyMax: existing?.dailyMax == null ? value : Math.max(existing.dailyMax, value),
+        };
+        if (shouldBecomeAnchor) mainWaveRecordedAt.set(observation.localDate, recordedAt);
+        continue;
+      }
+      const intensityZone = LOAD_INTENSITY_ZONE[observation.definitionId];
+      if (intensityZone && typeof observation.value === "number") {
+        const key = `${observation.localDate}:${observation.definitionId}`;
+        const recordedAt = observation.recordedAt || observation.updatedAt;
+        if ((latestObservationAt.get(key) ?? "") > recordedAt) continue;
+        latestObservationAt.set(key, recordedAt);
+        loadIntensityByDate[observation.localDate] ??= {};
+        loadIntensityByDate[observation.localDate][intensityZone] = Math.round(Math.max(0, Math.min(1, observation.value)) * 100);
+        continue;
+      }
       const zone = DEFINITION_ZONE[observation.definitionId];
       if (zone && typeof observation.value === "number") {
+        const key = `${observation.localDate}:${observation.definitionId}`;
+        const recordedAt = observation.recordedAt || observation.updatedAt;
+        if ((latestObservationAt.get(key) ?? "") > recordedAt) continue;
+        latestObservationAt.set(key, recordedAt);
         states[observation.localDate] ??= emptyZoneValues();
         states[observation.localDate][zone] = Math.round(observation.value * 100);
         continue;
@@ -145,6 +212,7 @@ export class CanonicalPrototypeStore {
     }
 
     for (const symptom of symptoms) {
+      addEvidence(evidenceByDate, symptom.localDate, symptom.epistemicStatus);
       entries[symptom.localDate] ??= [];
       const definition = metricDefinition(symptom.entityDefinitionId);
       entries[symptom.localDate].push({
@@ -158,28 +226,111 @@ export class CanonicalPrototypeStore {
         intensity: symptom.intensity == null ? 0 : Math.round(symptom.intensity * 100),
         suggestedBy: "user",
       });
+      if (symptom.presence === "present") {
+        addTimelineMarker(evidenceByDate, symptom.localDate, {
+          id: symptom.id,
+          definitionId: symptom.entityDefinitionId,
+          label: definition?.label
+            ?? entityLabels.get(symptom.entityDefinitionId)
+            ?? attributeLabel(symptom.attributes)
+            ?? "Своё ощущение",
+          kind: "symptom",
+          status: symptom.epistemicStatus === "inferred" ? "inferred" : "factual",
+        });
+      }
     }
 
     for (const event of events) {
+      for (const localDate of datesCoveredBy(event.localDate, event.occurredEndAt)) {
+        addEvidence(evidenceByDate, localDate, event.epistemicStatus);
+      }
       entries[event.localDate] ??= [];
       const definition = metricDefinition(event.entityDefinitionId);
+      const label = definition?.label
+        ?? entityLabels.get(event.entityDefinitionId)
+        ?? attributeLabel(event.attributes)
+        ?? "Своё действие";
       entries[event.localDate].push({
         id: event.id,
-        label: definition?.label
-          ?? entityLabels.get(event.entityDefinitionId)
-          ?? attributeLabel(event.attributes)
-          ?? "Своё действие",
+        label,
         zone: "general",
         status: "confirmed",
         intensity: 0,
         suggestedBy: "user",
       });
+      if (event.presence === "present") {
+        for (const localDate of datesCoveredBy(event.localDate, event.occurredEndAt)) {
+          addTimelineMarker(evidenceByDate, localDate, {
+            id: event.id,
+            definitionId: event.entityDefinitionId,
+            label,
+            kind: "event",
+            status: event.epistemicStatus === "inferred" ? "inferred" : "factual",
+          });
+        }
+      }
+    }
+
+    for (const planned of plannedEvents) {
+      if (planned.status !== "planned") continue;
+      const definition = metricDefinition(planned.entityDefinitionId);
+      for (const localDate of datesCoveredBy(planned.localDate, planned.plannedEndAt)) {
+        addEvidence(evidenceByDate, localDate, "planned");
+        addTimelineMarker(evidenceByDate, localDate, {
+          id: planned.id,
+          definitionId: planned.entityDefinitionId,
+          label: definition?.label ?? entityLabels.get(planned.entityDefinitionId) ?? "Запланированное событие",
+          kind: "planned",
+          status: "planned",
+        });
+      }
+    }
+
+    for (const forecast of forecasts) {
+      if (forecast.outcome !== "pending") continue;
+      const definition = metricDefinition(forecast.targetDefinitionId);
+      for (const localDate of datesCoveredBy(forecast.windowStart.slice(0, 10), forecast.windowEnd)) {
+        addEvidence(evidenceByDate, localDate, "predicted");
+        addTimelineMarker(evidenceByDate, localDate, {
+          id: forecast.id,
+          definitionId: forecast.targetDefinitionId,
+          label: definition?.label ?? "Персональный прогноз",
+          kind: "forecast",
+          status: "predicted",
+        });
+        if (
+          forecast.targetDefinitionId === "overall_wellbeing"
+          && typeof forecast.predictedValue === "number"
+          && (!mainWaveByDate[localDate] || mainWaveByDate[localDate].status === "predicted")
+        ) {
+          mainWaveByDate[localDate] = {
+            value: clampSigned(forecast.predictedValue),
+            status: "predicted",
+          };
+        }
+      }
     }
 
     return {
       profile: profileFromPreferences(profile?.preferences, fallbackProfile),
       hasStoredProfile: Boolean(profile),
       states,
+      loadIntensityByDate,
+      mainWaveByDate,
+      evidenceByDate,
+      patterns: patterns.map((pattern) => ({
+        id: pattern.id,
+        targetDefinitionId: pattern.targetDefinitionId,
+        factorDefinitionIds: pattern.factorDefinitionIds,
+        modifierDefinitionIds: pattern.modifierDefinitionIds,
+        stage: pattern.stage,
+        relationshipType: pattern.relationshipType,
+        evidenceScore: pattern.evidenceScore,
+        direction: pattern.direction,
+        typicalLagMinutes: pattern.typicalLagMinutes,
+        cumulativeWindowDays: pattern.cumulativeWindowDays,
+        lifecycle: pattern.lifecycle,
+      })),
       entries,
     };
   }
@@ -247,6 +398,106 @@ export class CanonicalPrototypeStore {
       schemaVersion: ALMA_SCHEMA_VERSION,
     };
     return this.observations.upsert(observation);
+  }
+
+  async saveLoadIntensity(input: {
+    localDate: string;
+    zone: Exclude<ZoneKey, "libido">;
+    value: number;
+    userId?: string;
+  }) {
+    const definitionId = ZONE_INTENSITY_DEFINITION[input.zone];
+    const id = stableUuid(`observation:${input.localDate}:${definitionId}`);
+    const existing = await this.observations.getById(id);
+    const now = new Date().toISOString();
+    return this.observations.upsert({
+      id,
+      userId: input.userId,
+      version: existing?.version ?? 1,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+      origin: "local",
+      definitionId,
+      localDate: input.localDate,
+      timezone: inferTimezone(),
+      timePrecision: "date_only",
+      recordedAt: now,
+      value: Math.max(0, Math.min(1, input.value / 100)),
+      rawValue: input.value,
+      unit: "ratio",
+      source: { sourceId: "manual", sourceRecordId: id },
+      epistemicStatus: "user_confirmed",
+      presence: "present",
+      confidence: 1,
+      metadata: { interaction: "prototype_load_intensity" },
+      isCanonical: true,
+      schemaVersion: ALMA_SCHEMA_VERSION,
+    } satisfies Observation<number>);
+  }
+
+  async saveOverallWellbeing(input: {
+    localDate: string;
+    value: number;
+    userId?: string;
+  }) {
+    const definitionId = "overall_wellbeing";
+    const id = stableUuid(`observation:${input.localDate}:${definitionId}`);
+    const existing = await this.observations.getById(id);
+    const now = new Date().toISOString();
+    return this.observations.upsert({
+      id,
+      userId: input.userId,
+      version: existing?.version ?? 1,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+      origin: "local",
+      definitionId,
+      localDate: input.localDate,
+      timezone: inferTimezone(),
+      timePrecision: "date_only",
+      recordedAt: now,
+      value: clampSigned(input.value / 100),
+      rawValue: input.value,
+      unit: "ratio",
+      source: { sourceId: "manual", sourceRecordId: id },
+      epistemicStatus: "user_confirmed",
+      presence: "present",
+      confidence: 1,
+      metadata: { interaction: "overall_wellbeing_anchor" },
+      isCanonical: true,
+      schemaVersion: ALMA_SCHEMA_VERSION,
+    } satisfies Observation<number>);
+  }
+
+  async recordMenstruationInterval(input: {
+    startDate: string;
+    durationDays: number;
+    userId?: string;
+  }) {
+    const durationDays = Math.max(1, Math.min(14, Math.round(input.durationDays)));
+    const id = stableUuid(`event:${input.startDate}:menstruation`);
+    const existing = await this.events.getById(id);
+    const now = new Date().toISOString();
+    return this.events.upsert({
+      id,
+      userId: input.userId,
+      version: existing?.version ?? 1,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+      origin: "local",
+      entityDefinitionId: "menstruation",
+      localDate: input.startDate,
+      occurredAt: `${input.startDate}T12:00:00.000Z`,
+      occurredEndAt: `${shiftIsoDate(input.startDate, durationDays - 1)}T23:59:59.999Z`,
+      timezone: inferTimezone(),
+      timePrecision: "date_only",
+      presence: "present",
+      attributes: { durationDays },
+      source: { sourceId: "manual", sourceRecordId: id },
+      epistemicStatus: "user_confirmed",
+      confidence: 1,
+      schemaVersion: ALMA_SCHEMA_VERSION,
+    } satisfies CanonicalEvent);
   }
 
   async saveEntry(input: {
@@ -551,6 +802,46 @@ function attributeLabel(attributes: Record<string, JsonValue> | undefined) {
 
 function emptyZoneValues(): ZoneValues {
   return { cognitive: 0, emotional: 0, physical: 0, libido: 0, social: 0 };
+}
+
+function addEvidence(
+  target: Record<string, DayEvidence>,
+  localDate: string,
+  status: "measured" | "user_confirmed" | "inferred" | "predicted" | "planned",
+) {
+  target[localDate] ??= { factualCount: 0, inferredCount: 0, plannedCount: 0, predictedCount: 0, markers: [] };
+  if (status === "measured" || status === "user_confirmed") target[localDate].factualCount += 1;
+  else if (status === "inferred") target[localDate].inferredCount += 1;
+  else if (status === "planned") target[localDate].plannedCount += 1;
+  else target[localDate].predictedCount += 1;
+}
+
+function addTimelineMarker(
+  target: Record<string, DayEvidence>,
+  localDate: string,
+  marker: TimelineMarker,
+) {
+  target[localDate] ??= { factualCount: 0, inferredCount: 0, plannedCount: 0, predictedCount: 0, markers: [] };
+  if (!target[localDate].markers.some((item) => item.id === marker.id && item.kind === marker.kind)) {
+    target[localDate].markers.push(marker);
+  }
+}
+
+function datesCoveredBy(startDate: string, endAt?: string) {
+  const endDate = endAt?.slice(0, 10) ?? startDate;
+  const dates: string[] = [];
+  let cursor = startDate;
+  for (let count = 0; count < 370 && cursor <= endDate; count += 1) {
+    dates.push(cursor);
+    cursor = shiftIsoDate(cursor, 1);
+  }
+  return dates;
+}
+
+function shiftIsoDate(value: string, amount: number) {
+  const date = new Date(`${value}T12:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + amount);
+  return date.toISOString().slice(0, 10);
 }
 
 function normalize(value: string) {

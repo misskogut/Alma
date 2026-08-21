@@ -16,7 +16,7 @@ function formatValue(value: number) {
   return `${value > 0 ? "+" : ""}${value}`;
 }
 
-export default function ActivityPanel({ actions, catalog, selected, values, symptoms, onToggle, onUpdate, onChange, onCommit, onAddSymptom, onUpdateSymptom }: { actions?: string[]; catalog?: string[]; selected: string[]; values: ZoneValues; symptoms: SymptomEntry[]; onToggle: (label: string) => void; onUpdate: (actions: string[], catalog: string[]) => void; onChange: (zone: ZoneKey, value: number) => void; onCommit: () => void; onAddSymptom: (symptom: SymptomEntry) => void; onUpdateSymptom: (symptom: SymptomEntry) => void }) {
+export default function ActivityPanel({ actions, catalog, selected, values, loadIntensities, symptoms, onToggle, onUpdate, onChange, onCommit, onChangeLoadIntensity, onCommitLoadIntensity, onAddSymptom, onUpdateSymptom }: { actions?: string[]; catalog?: string[]; selected: string[]; values: ZoneValues; loadIntensities: Partial<Record<Extract<ZoneKey, "physical" | "social">, number>>; symptoms: SymptomEntry[]; onToggle: (label: string) => void; onUpdate: (actions: string[], catalog: string[]) => void; onChange: (zone: ZoneKey, value: number) => void; onCommit: () => void; onChangeLoadIntensity: (zone: Extract<ZoneKey, "physical" | "social">, value: number) => void; onCommitLoadIntensity: (zone: Extract<ZoneKey, "physical" | "social">) => void; onAddSymptom: (symptom: SymptomEntry) => void; onUpdateSymptom: (symptom: SymptomEntry) => void }) {
   const [open, setOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
   const [custom, setCustom] = useState("");
@@ -47,11 +47,12 @@ export default function ActivityPanel({ actions, catalog, selected, values, symp
           const meta = ZONE_META[load.key];
           return <article className={`activity-load${active ? " is-open" : ""}`} key={load.key} style={{ "--load-color": meta.color } as CSSProperties}>
             <button className="activity-load-button" type="button" onClick={() => { setActiveLoad(active ? null : load.key); setMoreLoad(null); }} aria-expanded={active}>
-              <i>{load.icon}</i><span><b>{meta.label}</b><small>{active ? feelingLabel(value) : load.hint}</small></span><em>{formatValue(value)}</em>
+              <i>{load.icon}</i><span><b>{meta.label}</b><small>{active ? feelingLabel(value) : loadIntensities[load.key] == null ? load.hint : `нагрузка ${loadIntensities[load.key]}% · ${feelingLabel(value)}`}</small></span><em>{formatValue(value)}</em>
             </button>
             {active && <div className="activity-load-editor">
-              <input aria-label={meta.label} type="range" min="-100" max="100" value={value} onChange={(event) => onChange(load.key, Number(event.target.value))} onPointerUp={onCommit} onKeyUp={onCommit} />
-              <div className="activity-load-scale"><span>−100</span><b>{feelingLabel(value)}</b><span>+100</span></div>
+              <label className="load-intensity-field"><span>Сколько нагрузки было?</span><input aria-label={`Интенсивность: ${meta.label}`} type="range" min="0" max="100" value={loadIntensities[load.key] ?? 0} onChange={(event) => onChangeLoadIntensity(load.key, Number(event.target.value))} onPointerUp={() => onCommitLoadIntensity(load.key)} onKeyUp={() => onCommitLoadIntensity(load.key)} /><b>{loadIntensities[load.key] == null ? "не отмечено" : `${loadIntensities[load.key]}%`}</b></label>
+              <label className="load-response-field"><span>Как она ощущалась?</span><input aria-label={`Отклик: ${meta.label}`} type="range" min="-100" max="100" value={value} onChange={(event) => onChange(load.key, Number(event.target.value))} onPointerUp={onCommit} onKeyUp={onCommit} /></label>
+              <div className="activity-load-scale"><span>тяжело</span><b>{feelingLabel(value)} · {formatValue(value)}</b><span>поддерживала</span></div>
               <div className="activity-load-symptoms" aria-label={`Подходящие ощущения: ${meta.label}`}>
                 {quickSymptomsForLoad(load.key, value).map((label) => {
                   const selected = symptoms.some((item) => item.zone === load.key && item.label === label && item.status === "confirmed");

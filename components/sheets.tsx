@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
-import type { AlmaProfile, ContextKey, DayModel, DeviceSignals, EnvironmentPayload, SymptomEntry, WaveLayerKey, ZoneKey } from "../lib/alma";
-import { CONTEXT_META, ZONE_META, addDays, dateFromIso, daysBetween, feelingLabel, findDirectionalCoincidence, formatShortDate, isoFromDate, phaseLabel, pressureMmHg, relativeDayLabel, todayIso, weatherLabel } from "../lib/alma";
+import type { AlmaProfile, ContextKey, DayModel, DeviceSignals, EnvironmentPayload, PatternSummary, SymptomEntry, WaveLayerKey, ZoneKey } from "../lib/alma";
+import { CONTEXT_META, ZONE_META, addDays, dateFromIso, daysBetween, feelingLabel, formatShortDate, isoFromDate, phaseLabel, pressureMmHg, relativeDayLabel, todayIso, weatherLabel } from "../lib/alma";
+import { metricDefinition } from "../lib/alma-core";
 
 function SheetLayer({ children, onClose, className = "" }: { children: React.ReactNode; onClose: () => void; className?: string }) {
   useEffect(() => {
@@ -53,7 +54,16 @@ export function DaySheet({ day, environment, symptoms, activeContexts, internalW
   const visibleBehavior = (["screenTime", "nightPhone", "movement", "phoneActivity"] as ContextKey[]).filter((key) => activeContexts.has(key));
   const allContextReport = external ? `Сегодня рядом был такой фон: ${external.temperatureC == null ? "температура уточняется" : `${Math.round(external.temperatureC)}°`}, ${external.pressureHpa == null ? "давление уточняется" : `${pressureMmHg(external.pressureHpa)} мм`}, влажность ${external.humidityPct == null ? "уточняется" : `${Math.round(external.humidityPct)}%`}.` : "Данные о погоде ещё загружаются — пока можно смотреть только на свои отметки.";
   const ordered = (Object.keys(day.zones) as ZoneKey[]).sort((a, b) => day.zones[a] - day.zones[b]);
-  const report = `Сегодня ${ZONE_META[ordered[0]].label.toLowerCase()} ниже, а ${ZONE_META[ordered.at(-1) ?? ordered[0]].label.toLowerCase()} выше. ${allContextReport} Это фон для наблюдения, а не объяснение причины.`;
+  const report = day.hasZoneObservations
+    ? `В этот день ${ZONE_META[ordered[0]].label.toLowerCase()} ощущалась тяжелее, а ${ZONE_META[ordered.at(-1) ?? ordered[0]].label.toLowerCase()} — легче. ${allContextReport} Это наблюдение о том, что было рядом, а не объяснение причины.`
+    : `Нагрузки в этот день пока не отмечены. ${allContextReport} Можно оставить день таким или добавить только ту короткую отметку, которая действительно важна.`;
+  const overallStatus = day.integralStatus === "user_confirmed"
+    ? "твоя общая отметка"
+    : day.integralStatus === "inferred"
+      ? "оценка ALMA по доступным наблюдениям"
+      : day.integralStatus === "predicted"
+        ? "персональный прогноз, ещё не факт"
+        : "общая отметка не добавлена";
 
   return <SheetLayer onClose={onClose}>
     <section className="bottom-sheet" role="dialog" aria-modal="true" aria-labelledby="day-sheet-title">
@@ -62,13 +72,13 @@ export function DaySheet({ day, environment, symptoms, activeContexts, internalW
 
       <div className={`day-cycle-summary marker-${day.marker ?? "none"}`}>
         <div><strong>{day.cycleDay}</strong><small>день цикла</small></div>
-        <p><b>{phaseLabel(day.phase)}</b><span>{day.marker === "menstruation" ? "День менструации отмечен красной бусиной" : day.marker === "ovulation" ? "Расчётная овуляция отмечена светящейся бусиной" : day.marker === "fertile" ? "Вероятное фертильное окно" : "Календарный фон цикла"}</span></p>
+        <p><b>{phaseLabel(day.phase)}</b><span>{day.marker === "menstruation" ? day.markerStatus === "factual" ? "Менструация отмечена тобой" : "Расчётный день менструации" : day.marker === "ovulation" ? day.markerStatus === "factual" ? "Овуляция отмечена тобой" : "Расчётный день овуляции" : day.marker === "fertile" ? day.markerStatus === "factual" ? "Фертильное окно отмечено тобой" : "Расчётное фертильное окно" : "Календарный фон цикла"}</span></p>
       </div>
 
       <article className="day-report"><p className="eyebrow">краткий отчёт</p><p>{report}</p></article>
 
       <p className="sheet-section-label">Включённые слои</p>
-      {activeLayers.has("internal") && <div className="absolute-data-grid layer-data"><article><small>Внутренняя среда</small><strong>{day.integral > 0 ? "+" : ""}{day.integral}</strong><em>средняя волна</em></article>{visibleInternal.map((zone) => <article key={zone}><small>{ZONE_META[zone].short}</small><strong>{day.zones[zone] > 0 ? "+" : ""}{day.zones[zone]}</strong><em>{feelingLabel(day.zones[zone])}</em></article>)}</div>}
+      {activeLayers.has("internal") && <div className="absolute-data-grid layer-data"><article><small>Общее самочувствие</small><strong>{day.integral == null ? "—" : `${day.integral > 0 ? "+" : ""}${day.integral}`}</strong><em>{overallStatus}</em></article>{visibleInternal.map((zone) => <article key={zone}><small>{ZONE_META[zone].label}</small><strong>{day.hasZoneObservations ? `${day.zones[zone] > 0 ? "+" : ""}${day.zones[zone]}` : "—"}</strong><em>{day.hasZoneObservations ? feelingLabel(day.zones[zone]) : "не отмечено"}</em></article>)}</div>}
       {activeLayers.has("external") && <div className="active-layer-note"><i style={{ background: "#65d6ef" }} /><span>Внешняя среда</span><small>показываем общую картину</small></div>}
       {visibleExternal.length > 0 && <div className="absolute-data-grid layer-data">{visibleExternal.map((row) => <article key={row.key}><small>{CONTEXT_META[row.key].label}</small><strong>{row.value}</strong><em>{row.detail}</em></article>)}</div>}
       {activeLayers.has("behavior") && <div className="active-layer-note"><i style={{ background: "#ffd06c" }} /><span>Поведенческая среда</span><small>показываем общую картину</small></div>}
@@ -80,7 +90,7 @@ export function DaySheet({ day, environment, symptoms, activeContexts, internalW
       {!activeLayers.size && !visibleInternal.length && !visibleExternal.length && !visibleBehavior.length && <p className="no-layer-data">Включи среднюю волну или отдельную метрику под графиком — здесь останутся только выбранные данные.</p>}
 
       <div className="sheet-symptoms"><p className="sheet-section-label">Симптомы и состояния</p>{confirmed.length ? <div>{confirmed.map((symptom) => <span key={symptom.id}>{symptom.label} · {symptom.intensity}%</span>)}</div> : <p>На этот день ничего не подтверждено.</p>}</div>
-      <p className="observation-footnote">Observation, not prescription</p>
+      <p className="observation-footnote">Наблюдение, а не медицинское заключение</p>
     </section>
   </SheetLayer>;
 }
@@ -337,34 +347,89 @@ export function CycleSettingsSheet({
   </SheetLayer>;
 }
 
-export function ConnectionsSheet({ day, days, environment, onClose }: { day: DayModel; days: DayModel[]; environment: EnvironmentPayload | null; onClose: () => void }) {
-  const [highlight, setHighlight] = useState(true);
+function definitionLabel(definitionId: string) {
+  return metricDefinition(definitionId)?.label ?? definitionId.replaceAll("_", " ");
+}
+
+function patternStageLabel(stage: PatternSummary["stage"]) {
+  return {
+    observation: "первое наблюдение",
+    possible_link: "проверяем возможную связь",
+    repeating_pattern: "повторяется в твоих наблюдениях",
+    established_personal_pattern: "устойчивая личная закономерность",
+  }[stage];
+}
+
+function patternLifecycleLabel(lifecycle: PatternSummary["lifecycle"]) {
+  return {
+    emerged: "появилось недавно",
+    stable: "пока остаётся стабильным",
+    strengthening: "в последних наблюдениях повторяется чаще",
+    weakening: "в последних наблюдениях повторяется реже",
+    changed: "характер связи изменился",
+    no_longer_observed: "в последнее время не повторяется",
+    refined: "стало понятнее после новых отметок",
+  }[lifecycle];
+}
+
+function patternCopy(pattern: PatternSummary) {
+  const target = definitionLabel(pattern.targetDefinitionId).toLocaleLowerCase("ru-RU");
+  const factors = pattern.factorDefinitionIds.map(definitionLabel).join(", ").toLocaleLowerCase("ru-RU");
+  if (pattern.relationshipType === "lagged" && pattern.typicalLagMinutes) {
+    const hours = Math.max(1, Math.round(pattern.typicalLagMinutes / 60));
+    return `В твоих наблюдениях ${target} чаще менялось примерно через ${hours} ч после того, как менялось: ${factors}. Посмотрим, повторится ли это дальше.`;
+  }
+  if (pattern.relationshipType === "cumulative" && pattern.cumulativeWindowDays) {
+    return `В твоих наблюдениях ${target} чаще менялось после ${pattern.cumulativeWindowDays} дней, когда рядом повторялось: ${factors}. Это персональное наблюдение, а не доказанная причина.`;
+  }
+  if (pattern.relationshipType === "inverse") {
+    return `В твоих наблюдениях ${target} и ${factors} чаще менялись в разные стороны. ALMA продолжит проверять это на новых днях.`;
+  }
+  return `В твоих наблюдениях ${target} чаще менялось в дни, когда рядом менялось: ${factors}. Это совпадение в личной истории, а не утверждение о причине.`;
+}
+
+export function ConnectionsSheet({ day, patterns, selectedDefinitionId, onSelectDefinition, onClose }: {
+  day: DayModel;
+  patterns: PatternSummary[];
+  selectedDefinitionId: string | null;
+  onSelectDefinition: (definitionId: string | null) => void;
+  onClose: () => void;
+}) {
   const ordered = (Object.keys(day.zones) as ZoneKey[]).sort((a, b) => day.zones[b] - day.zones[a]);
   const high = ordered[0];
   const low = ordered.at(-1) ?? ordered[0];
-  const divergence = day.zones[high] - day.zones[low];
-  const internal = days.map((item) => item.integral);
-  const temperatureByDate = new Map(environment?.days.map((item) => [item.date, item.temperatureC]) ?? []);
-  const temperature = days.map((item) => temperatureByDate.get(item.iso) ?? null);
-  const coincidence = findDirectionalCoincidence(internal, temperature);
-  const coincidenceCopy = coincidence.matches === 0 ? null
-    : coincidence.matches === 1 ? "Мы заметили: в этот раз твоя общая волна менялась в ту же сторону, что и температура. Пока это только первое совпадение."
-    : `В ${coincidence.matches} из ${coincidence.observed} похожих изменений общая волна и температура двигались в одну сторону. Это может быть личной связью — посмотрим, повторится ли она.`;
+  const visiblePatterns = selectedDefinitionId
+    ? patterns.filter((pattern) => [pattern.targetDefinitionId, ...pattern.factorDefinitionIds, ...pattern.modifierDefinitionIds].includes(selectedDefinitionId))
+    : patterns;
 
   return <SheetLayer onClose={onClose} className="connections-layer">
     <section className="connections-sheet" role="dialog" aria-modal="true" aria-labelledby="connections-title">
-      <header className="sheet-header"><div><p className="eyebrow">личные наблюдения</p><h2 id="connections-title">Что могло быть рядом</h2></div><button type="button" aria-label="Закрыть" onClick={onClose}>×</button></header>
-      <p className="connections-intro">Здесь можно спокойно посмотреть, что чаще бывает рядом с твоим состоянием. Совпадение не доказывает причину.</p>
-      <div className="connection-bars">
-        {(Object.keys(day.zones) as ZoneKey[]).map((zone) => <div key={zone}><span>{ZONE_META[zone].short}</span><i><b style={{ width: `${Math.abs(day.zones[zone])}%`, background: ZONE_META[zone].color, marginLeft: day.zones[zone] < 0 ? `${50 - Math.abs(day.zones[zone]) / 2}%` : "50%" }} /></i><strong>{day.zones[zone] > 0 ? "+" : ""}{day.zones[zone]}</strong></div>)}
+      <header className="sheet-header"><div><p className="eyebrow">личные наблюдения</p><h2 id="connections-title">Что ALMA замечает со временем</h2></div><button type="button" aria-label="Закрыть" onClick={onClose}>×</button></header>
+      <p className="connections-intro">Здесь появляются только закономерности, которые уже сохранены после анализа твоей истории. ALMA показывает совпадения и продолжает их проверять — она не называет их причиной.</p>
+
+      {selectedDefinitionId && <div className="connection-focus"><span><small>смотрим связи для</small><strong>{definitionLabel(selectedDefinitionId)}</strong></span><button type="button" onClick={() => onSelectDefinition(null)}>показать все</button></div>}
+
+      {day.hasZoneObservations ? <section className="connection-day-snapshot">
+        <p className="eyebrow">отметки этого дня</p>
+        <strong>{ZONE_META[high].label} ощущалась легче, {ZONE_META[low].label.toLocaleLowerCase("ru-RU")} — тяжелее</strong>
+        <div className="connection-bars">
+          {(Object.keys(day.zones) as ZoneKey[]).map((zone) => <div key={zone}><span>{ZONE_META[zone].short}</span><i><b style={{ width: `${Math.abs(day.zones[zone]) / 2}%`, background: ZONE_META[zone].color, marginLeft: day.zones[zone] < 0 ? `${50 - Math.abs(day.zones[zone]) / 2}%` : "50%" }} /></i><strong>{day.zones[zone] > 0 ? "+" : ""}{day.zones[zone]}</strong></div>)}
+        </div>
+      </section> : <p className="connection-day-empty">Для выбранного дня нагрузка не отмечена. Исторические закономерности ниже всё равно можно посмотреть.</p>}
+
+      <div className="connection-patterns">
+        {visiblePatterns.map((pattern) => {
+          const focusDefinitionId = pattern.factorDefinitionIds[0] ?? pattern.targetDefinitionId;
+          return <article key={pattern.id} className={`connection-pattern stage-${pattern.stage}`}>
+            <header><span>{patternStageLabel(pattern.stage)}</span><small>{patternLifecycleLabel(pattern.lifecycle)}</small></header>
+            <h3>{definitionLabel(pattern.targetDefinitionId)} и {pattern.factorDefinitionIds.map(definitionLabel).join(", ")}</h3>
+            <p>{patternCopy(pattern)}</p>
+            {pattern.modifierDefinitionIds.length > 0 && <p className="pattern-modifiers">Пока это заметнее, когда рядом есть: {pattern.modifierDefinitionIds.map(definitionLabel).join(", ").toLocaleLowerCase("ru-RU")}.</p>}
+            <button type="button" onClick={() => onSelectDefinition(focusDefinitionId)}>показать эти дни на волне</button>
+          </article>;
+        })}
+        {!visiblePatterns.length && <article className="connection-empty-state"><i>⌁</i><strong>{selectedDefinitionId ? "Для этой отметки связь пока не сформировалась" : "Персональные закономерности ещё собираются"}</strong><p>ALMA использует автоматический фон и твои короткие отметки. Когда повторение станет достаточно устойчивым, оно появится здесь простыми словами.</p></article>}
       </div>
-      <button className={`highlight-toggle${highlight ? " is-on" : ""}`} type="button" onClick={() => setHighlight(!highlight)}><i />автоподсветка <span>{highlight ? "включена" : "выключена"}</span></button>
-      {highlight && <div className="connection-findings">
-        <article><p className="eyebrow">твой сегодняшний ритм</p><strong>{ZONE_META[high].short} выше, {ZONE_META[low].short} ниже</strong><p>Сегодня эти части состояния ощущаются по-разному. Это можно учитывать, когда вспоминаешь свой день.</p></article>
-        {environment && <article><p className="eyebrow">внешний фон</p><strong>Давление и влажность рядом с твоими отметками</strong><p>Они помогают увидеть фон дня, но сами по себе не объясняют самочувствие.</p></article>}
-        {coincidenceCopy && <article><p className="eyebrow">температура и состояние</p><strong>{coincidence.matches === 1 ? "Первое совпадение" : "Появляется повторение"}</strong><p>{coincidenceCopy}</p></article>}
-        {environment && !coincidenceCopy && <article><p className="eyebrow">наблюдаем дальше</p><strong>Связь ещё не успела проявиться</strong><p>Когда в похожие дни появятся повторения, ALMA покажет их простыми словами — например, что изменения давления часто совпадали с изменением настроения.</p></article>}
-      </div>}
       <p className="observation-footnote">Ищем повторения, а не ставим диагнозы</p>
     </section>
   </SheetLayer>;

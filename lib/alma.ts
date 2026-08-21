@@ -14,31 +14,6 @@ export type CycleMarker = "menstruation" | "fertile" | "ovulation" | null;
 export type FertilityContext = { label: string; hint: string; level: "low" | "possible" | "high" };
 export type SyncMode = "connecting" | "cloud" | "local";
 
-export type DirectionalCoincidence = {
-  observed: number;
-  matches: number;
-  direction: "рост" | "снижение" | null;
-};
-
-/** Compares movement only; this is intentionally not a causal claim. */
-export function findDirectionalCoincidence(subject: Array<number | null>, context: Array<number | null>, threshold = 8): DirectionalCoincidence {
-  let observed = 0;
-  let matches = 0;
-  let lastDirection: DirectionalCoincidence["direction"] = null;
-  const length = Math.min(subject.length, context.length);
-  for (let index = 1; index < length; index += 1) {
-    const subjectDelta = subject[index] == null || subject[index - 1] == null ? null : subject[index]! - subject[index - 1]!;
-    const contextDelta = context[index] == null || context[index - 1] == null ? null : context[index]! - context[index - 1]!;
-    if (subjectDelta == null || contextDelta == null || Math.abs(subjectDelta) < threshold || Math.abs(contextDelta) < threshold) continue;
-    observed += 1;
-    if (Math.sign(subjectDelta) === Math.sign(contextDelta)) {
-      matches += 1;
-      lastDirection = subjectDelta > 0 ? "рост" : "снижение";
-    }
-  }
-  return { observed, matches, direction: lastDirection };
-}
-
 export type ZoneValues = Record<ZoneKey, number>;
 
 export type AlmaProfile = {
@@ -72,6 +47,47 @@ export type SymptomEntry = {
   suggestedBy: "system" | "user";
 };
 
+export type MainWaveStatus = "user_confirmed" | "inferred" | "predicted" | "unknown";
+
+export type MainWaveDatum = {
+  value: number;
+  status: Exclude<MainWaveStatus, "unknown">;
+  dailyMin?: number;
+  dailyMax?: number;
+};
+
+export type TimelineMarkerKind = "event" | "symptom" | "planned" | "forecast";
+
+export type TimelineMarker = {
+  id: string;
+  definitionId: string;
+  label: string;
+  kind: TimelineMarkerKind;
+  status: "factual" | "inferred" | "planned" | "predicted";
+};
+
+export type DayEvidence = {
+  factualCount: number;
+  inferredCount: number;
+  plannedCount: number;
+  predictedCount: number;
+  markers: TimelineMarker[];
+};
+
+export type PatternSummary = {
+  id: string;
+  targetDefinitionId: string;
+  factorDefinitionIds: string[];
+  modifierDefinitionIds: string[];
+  stage: "observation" | "possible_link" | "repeating_pattern" | "established_personal_pattern";
+  relationshipType: "association" | "inverse" | "lagged" | "cumulative" | "threshold" | "interaction" | "compensation" | "mediated";
+  evidenceScore: number;
+  direction?: "up_up" | "up_down" | "down_up" | "down_down";
+  typicalLagMinutes?: number;
+  cumulativeWindowDays?: number;
+  lifecycle: "emerged" | "stable" | "strengthening" | "weakening" | "changed" | "no_longer_observed" | "refined";
+};
+
 export type DayModel = {
   iso: string;
   date: Date;
@@ -83,7 +99,13 @@ export type DayModel = {
   isToday: boolean;
   isForecast: boolean;
   zones: ZoneValues;
-  integral: number;
+  hasZoneObservations: boolean;
+  integral: number | null;
+  integralStatus: MainWaveStatus;
+  dailyMin?: number;
+  dailyMax?: number;
+  evidence: DayEvidence;
+  markerStatus: "factual" | "predicted" | null;
 };
 
 export type EnvironmentDay = {
@@ -260,9 +282,9 @@ export function relativeDayLabel(iso: string, currentIso = todayIso()) {
   const delta = daysBetween(currentIso, iso);
   if (delta === 0) return "Сегодня";
   if (delta === -1) return "Вчера";
-  if (delta === 1) return "Прогноз +1";
+  if (delta === 1) return "Завтра";
   if (delta < 0) return `${Math.abs(delta)} дн. назад`;
-  return `Прогноз +${delta}`;
+  return `Через ${delta} дн.`;
 }
 
 export function defaultProfile(currentIso = todayIso()): AlmaProfile {
@@ -284,14 +306,17 @@ function emptyZones(): ZoneValues {
   return { cognitive: 0, emotional: 0, physical: 0, libido: 0, social: 0 };
 }
 
-// The integral is deliberately subjective: only cognitive, emotional and libido
-// values participate. External environments and physical activity remain layers,
-// never causes of the integral state.
-export function provisionalIntegral(values: ZoneValues) {
-  return Math.round((values.cognitive + values.emotional + values.libido) / 3);
-}
-
-export function buildDayModels(profile: AlmaProfile, stateByDate: Record<string, ZoneValues>, currentIso = todayIso(), radius = TIMELINE_RADIUS) {
+export function buildDayModels(
+  profile: AlmaProfile,
+  stateByDate: Record<string, ZoneValues>,
+  currentIso = todayIso(),
+  radius = TIMELINE_RADIUS,
+  options: {
+    mainWaveByDate?: Record<string, MainWaveDatum>;
+    evidenceByDate?: Record<string, DayEvidence>;
+    cycleProfileConfirmed?: boolean;
+  } = {},
+) {
   return Array.from({ length: radius * 2 + 1 }, (_, index): DayModel => {
     const offset = index - radius;
     const iso = addDays(currentIso, offset);
@@ -300,6 +325,17 @@ export function buildDayModels(profile: AlmaProfile, stateByDate: Record<string,
     // An unknown day stays neutral in the visual projection. The former
     // prototype contour looked like personal evidence and must never feed Core.
     const zones = stateByDate[iso] ?? emptyZones();
+    const mainWave = options.mainWaveByDate?.[iso];
+    const evidence = options.evidenceByDate?.[iso] ?? emptyDayEvidence();
+    const calculatedMarker = options.cycleProfileConfirmed ? getCycleMarker(cycleDay, profile) : null;
+    const factualCycleMarker = evidence.markers.find((item) => item.status === "factual" && ["menstruation", "menstruation_start", "ovulation_observation", "fertile_window_observation"].includes(item.definitionId));
+    const marker = factualCycleMarker
+      ? factualCycleMarker.definitionId.includes("ovulation")
+        ? "ovulation"
+        : factualCycleMarker.definitionId.includes("fertile")
+          ? "fertile"
+          : "menstruation"
+      : calculatedMarker;
     return {
       iso,
       date,
@@ -307,13 +343,23 @@ export function buildDayModels(profile: AlmaProfile, stateByDate: Record<string,
       weekday: new Intl.DateTimeFormat("ru-RU", { weekday: "short", timeZone: "UTC" }).format(date).replace(".", ""),
       cycleDay,
       phase: getCyclePhase(cycleDay, profile),
-      marker: getCycleMarker(cycleDay, profile),
+      marker,
       isToday: offset === 0,
       isForecast: offset > 0,
       zones,
-      integral: provisionalIntegral(zones),
+      hasZoneObservations: Boolean(stateByDate[iso]),
+      integral: mainWave ? Math.round(mainWave.value * 100) : null,
+      integralStatus: mainWave?.status ?? "unknown",
+      dailyMin: mainWave?.dailyMin == null ? undefined : Math.round(mainWave.dailyMin * 100),
+      dailyMax: mainWave?.dailyMax == null ? undefined : Math.round(mainWave.dailyMax * 100),
+      evidence,
+      markerStatus: factualCycleMarker ? "factual" : marker ? "predicted" : null,
     };
   });
+}
+
+function emptyDayEvidence(): DayEvidence {
+  return { factualCount: 0, inferredCount: 0, plannedCount: 0, predictedCount: 0, markers: [] };
 }
 
 export function defaultState(_currentIso = todayIso()): Record<string, ZoneValues> {
