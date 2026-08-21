@@ -27,7 +27,7 @@ Source of truth: `ALMA_MASTER_ARCHITECTURE_V1.2` → Companion → transcript
 | G — Wave/event UX | IMPLEMENTED | Factual/planned/forecast beads, evidence density, selection filter и intraday range при наличии evidence. |
 | H — Foundational blocks | IMPLEMENTED | Basic nutrition, research entry/feed и постоянно доступный быстрый contact control. |
 | I — Sync | PARTIAL | Local outbox, idempotent Supabase sync, base-version conflict protection и derived sync работают; browser adapter пока localStorage, аналитика пересчитывается клиентом, не отдельным server worker. |
-| J — Tests/docs/deploy | PARTIAL | TypeScript, 57 unit/integration tests и production webpack build проходят; обязательные docs созданы. Отдельный Preview и его commit verification выполняются последним шагом. |
+| J — Tests/docs/deploy | PARTIAL | TypeScript, 58 unit/integration tests и production webpack build проходят; обязательные docs созданы. Отдельный Preview и его commit verification выполняются последним шагом. |
 
 ## Definition of Done
 
@@ -54,7 +54,7 @@ Source of truth: `ALMA_MASTER_ARCHITECTURE_V1.2` → Companion → transcript
 | Offline input и duplicate-safe sync | IMPLEMENTED/PARTIAL | Работает в browser localStorage + outbox; IndexedDB и background server recompute ещё не реализованы. |
 | Registry/adapter extensibility | IMPLEMENTED | Metric/Source registries и unavailable adapters для будущих источников. |
 | Recognizable current UI | IMPLEMENTED | Полный redesign не делался; лотос, дуга, волны и approved interactions сохранены. |
-| Required tests/docs | IMPLEMENTED | 57 tests и 12 обязательных architecture docs. Некоторые полные browser E2E требуют Preview verification. |
+| Required tests/docs | IMPLEMENTED | 58 tests и 12 обязательных architecture docs. Некоторые полные browser E2E требуют Preview verification. |
 
 ## Оставшиеся PARTIAL/MISSING области
 

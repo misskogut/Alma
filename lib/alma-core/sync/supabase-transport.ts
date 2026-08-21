@@ -6,6 +6,7 @@ import type {
   ContextPeriod,
   DynamicFeature,
   ForecastRecord,
+  LegacyUnclassifiedRecord,
   Observation,
   PersonalExperimentRecord,
   PersonalPattern,
@@ -228,12 +229,20 @@ const mappings: Record<string, RecordMapping> = {
     toRow: outputFeedToRow as RecordMapping["toRow"],
     fromRow: rowToOutputFeed,
   },
+  legacy_unclassified: {
+    table: "alma_v2_legacy_unclassified",
+    identityColumn: "id",
+    conflictColumn: "id",
+    toRow: legacyUnclassifiedToRow as RecordMapping["toRow"],
+    fromRow: rowToLegacyUnclassified,
+  },
 };
 
 const recordTypeAliases: Record<string, keyof typeof mappings> = {
   plannedEvents: "planned_events",
   dynamicFeatures: "dynamic_features",
   personalTools: "personal_tools",
+  legacyUnclassified: "legacy_unclassified",
 };
 
 function mappingFor(recordType: string) {
@@ -402,6 +411,43 @@ function rowToProfile(row: SupabaseRow): UserProfileRecord {
     preferences: (row.preferences ?? {}) as UserProfileRecord["preferences"],
     locationPrivacy: row.location_privacy as UserProfileRecord["locationPrivacy"],
     populationOptIn: Boolean(row.population_opt_in),
+    schemaVersion: Number(row.schema_version),
+  };
+}
+
+function legacyUnclassifiedToRow(
+  record: LegacyUnclassifiedRecord,
+  userId: string,
+): SupabaseRow {
+  return {
+    ...baseRow(record, userId),
+    legacy_source: record.legacySource,
+    legacy_table: record.legacyTable ?? record.legacySource,
+    legacy_record_id: record.legacyRecordKey ?? record.id,
+    local_date: record.localDate ?? null,
+    raw_payload: record.rawPayload,
+    reason: record.reason,
+    classification_status: record.classificationStatus,
+    resolved_entity_definition_id: record.classifiedEntityDefinitionId ?? null,
+    resolved_record_id: record.classifiedRecordId ?? null,
+    resolved_at: record.classifiedAt ?? null,
+    schema_version: record.schemaVersion,
+  };
+}
+
+function rowToLegacyUnclassified(row: SupabaseRow): LegacyUnclassifiedRecord {
+  return {
+    ...versionedFromRow(row),
+    legacySource: String(row.legacy_source ?? row.legacy_table),
+    legacyTable: optionalString(row.legacy_table),
+    legacyRecordKey: optionalString(row.legacy_record_id),
+    localDate: optionalString(row.local_date),
+    rawPayload: (row.raw_payload ?? null) as LegacyUnclassifiedRecord["rawPayload"],
+    reason: String(row.reason),
+    classificationStatus: row.classification_status as LegacyUnclassifiedRecord["classificationStatus"],
+    classifiedEntityDefinitionId: optionalString(row.resolved_entity_definition_id),
+    classifiedRecordId: optionalString(row.resolved_record_id),
+    classifiedAt: optionalString(row.resolved_at),
     schemaVersion: Number(row.schema_version),
   };
 }

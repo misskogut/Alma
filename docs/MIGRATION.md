@@ -14,7 +14,8 @@
 
 1. `20260821090000_alma_master_v1_2_foundation.sql`;
 2. `20260821093000_alma_master_v1_2_covering_indexes.sql`;
-3. `20260821094500_alma_master_v1_2_event_status_constraint.sql`.
+3. `20260821094500_alma_master_v1_2_event_status_constraint.sql`;
+4. `20260821190213_alma_master_v1_2_legacy_sync_columns.sql`.
 
 Для foundation и последующих изменений сохранены rollback companions. Production schema не должна правиться вручную вне migration history.
 

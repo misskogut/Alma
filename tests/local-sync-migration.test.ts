@@ -21,6 +21,7 @@ import type {
   DynamicFeature,
   ForecastRecord,
   InputRequestRecord,
+  LegacyUnclassifiedRecord,
   Observation,
   OutputFeedRecord,
   PersonalExperimentRecord,
@@ -241,6 +242,38 @@ test("Supabase mapping preserves canonical observation semantics", () => {
   assert.equal(restored.definitionId, source.definitionId);
   assert.equal(restored.value, source.value);
   assert.equal(restored.source.sourceId, "manual");
+});
+
+test("Supabase mapping preserves the legacy quarantine without making it evidence", () => {
+  const userId = "00000000-0000-4000-a000-000000000001";
+  const source: LegacyUnclassifiedRecord = {
+    id: "00000000-0000-4000-a000-000000000099",
+    userId,
+    version: 2,
+    createdAt: "2026-08-20T12:00:00.000Z",
+    updatedAt: "2026-08-21T12:00:00.000Z",
+    origin: "migration",
+    legacySource: "legacy_local",
+    legacyTable: "alma-observation-v2",
+    legacyRecordKey: "2026-08-20:ambiguous",
+    localDate: "2026-08-20",
+    rawPayload: { label: "Особое ощущение" },
+    reason: "Требуется явная классификация.",
+    classificationStatus: "pending",
+    schemaVersion: 2,
+  };
+
+  const row = canonicalRecordToSupabaseRow("legacy_unclassified", source, userId);
+  const restored = supabaseRowToCanonicalRecord(
+    "legacy_unclassified",
+    row,
+  ) as LegacyUnclassifiedRecord;
+
+  assert.equal(row.classification_status, "pending");
+  assert.equal(row.local_date, "2026-08-20");
+  assert.equal(restored.legacyRecordKey, source.legacyRecordKey);
+  assert.equal(restored.classificationStatus, "pending");
+  assert.deepEqual(restored.rawPayload, source.rawPayload);
 });
 
 test("Supabase transport protects base version and pulls deterministic changes", async () => {

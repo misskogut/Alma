@@ -388,10 +388,13 @@ export interface LegacyUnclassifiedRecord extends VersionedRecord {
   legacySource: string;
   legacyTable?: string;
   legacyRecordKey?: string;
+  localDate?: string;
   rawPayload: JsonValue;
   reason: string;
   classificationStatus: "pending" | "classified" | "discarded";
   classifiedEntityDefinitionId?: string;
+  classifiedRecordId?: string;
+  classifiedAt?: string;
   schemaVersion: number;
 }
 

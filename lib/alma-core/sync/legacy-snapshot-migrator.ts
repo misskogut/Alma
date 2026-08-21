@@ -192,6 +192,7 @@ export async function migrateLegacyLocalSnapshot(input: {
         legacySource: "legacy_local",
         legacyTable: "alma-observation-v2",
         legacyRecordKey: `${localDate}:${entry.id}`,
+        localDate,
         rawPayload: sanitizeJson(entry),
         reason: "Не удалось надёжно определить, является запись симптомом или событием.",
         classificationStatus: "pending",
