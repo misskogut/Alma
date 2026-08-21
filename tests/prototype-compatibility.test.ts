@@ -4,14 +4,19 @@ import { defaultProfile } from "../lib/alma";
 import { CanonicalPrototypeStore } from "../lib/canonical-prototype-store";
 import { LocalDatabase, MemoryStorageAdapter } from "../lib/alma-core";
 import type {
+  CanonicalEntity,
   CanonicalEvent,
   ForecastRecord,
+  InputRequestRecord,
   Observation,
+  OutputFeedRecord,
   PersonalPattern,
   PlannedEvent,
+  ResearchQuestRecord,
   SymptomEpisode,
   UserProfileRecord,
 } from "../lib/alma-core";
+import { createOutputFeedItem } from "../lib/alma-core";
 
 test("prototype compatibility projects events separately from symptoms", async () => {
   const database = new LocalDatabase(new MemoryStorageAdapter(), "projection-test");
@@ -273,4 +278,109 @@ test("dismissing a quick action soft-deletes its event", async () => {
   });
   assert.equal((await database.list("events")).length, 0);
   assert.equal((await database.list("events", true)).length, 1);
+});
+
+test("an empty Phase H projection contains no synthetic personal evidence", async () => {
+  const database = new LocalDatabase(new MemoryStorageAdapter(), "phase-h-empty-test");
+  const store = new CanonicalPrototypeStore(database);
+  const projection = await store.loadProjection(defaultProfile("2026-08-21"));
+
+  assert.deepEqual(projection.nutritionByDate, {});
+  assert.deepEqual(projection.researchQuests, []);
+  assert.deepEqual(projection.inputRequests, []);
+  assert.deepEqual(projection.outputFeed, []);
+});
+
+test("a named food remains a distinct custom intake for focused research", async () => {
+  const database = new LocalDatabase(new MemoryStorageAdapter(), "custom-intake-test");
+  const store = new CanonicalPrototypeStore(database);
+  await store.saveIntake({
+    localDate: "2026-08-21",
+    definitionId: "food_item",
+    label: "Шоколад",
+    quantity: 25,
+    unit: "г",
+    dayPart: "evening",
+  });
+
+  const [event] = await database.list<CanonicalEvent>("events");
+  const [entity] = await database.list<CanonicalEntity>("entities");
+  assert.equal(event.entityDefinitionId, "custom_intake_шоколад");
+  assert.equal(event.quantity, 25);
+  assert.equal(event.attributes?.dayPart, "evening");
+  assert.equal(entity.canonicalKey, event.entityDefinitionId);
+  assert.equal(entity.kind, "intake");
+
+  const projection = await store.loadProjection(defaultProfile("2026-08-21"));
+  assert.deepEqual(projection.nutritionByDate["2026-08-21"], [{
+    id: event.id,
+    definitionId: "custom_intake_шоколад",
+    label: "Шоколад",
+    localDate: "2026-08-21",
+    quantity: 25,
+    unit: "г",
+    dayPart: "evening",
+  }]);
+});
+
+test("starting research creates a real quest and only its missing input", async () => {
+  const database = new LocalDatabase(new MemoryStorageAdapter(), "research-contact-test");
+  const store = new CanonicalPrototypeStore(database);
+  await store.saveIntake({
+    localDate: "2026-08-21",
+    definitionId: "coffee",
+    label: "Кофе",
+  });
+  const quest = await store.startResearch({
+    title: "Меняется ли самочувствие в дни с кофе?",
+    targetDefinitionId: "overall_wellbeing",
+    factorDefinitionIds: ["coffee"],
+  });
+
+  const quests = await database.list<ResearchQuestRecord>("research_quests");
+  const requests = await database.list<InputRequestRecord>("input_requests");
+  assert.equal(quests.length, 1);
+  assert.equal(quests[0].id, quest.id);
+  assert.equal(quests[0].status, "active");
+  assert.deepEqual(quests[0].requiredMetricIds.sort(), ["coffee", "overall_wellbeing"]);
+  assert.deepEqual(requests.map((request) => request.targetDefinitionId), ["overall_wellbeing"]);
+  assert.match(requests[0].explanation, /поможет проверить исследование/u);
+
+  await store.answerInputRequest({
+    requestId: requests[0].id,
+    localDate: "2026-08-21",
+    value: 0.35,
+  });
+  const answered = await database.get<InputRequestRecord>("input_requests", requests[0].id);
+  const observations = await database.list<Observation<number>>("observations");
+  assert.equal(answered?.status, "answered");
+  assert.equal(answered?.answerObservationId, observations[0].id);
+  assert.equal(observations[0].definitionId, "overall_wellbeing");
+  assert.equal(observations[0].value, 0.35);
+});
+
+test("output feed is projected from persisted evidence and read state stays canonical", async () => {
+  const database = new LocalDatabase(new MemoryStorageAdapter(), "output-feed-projection-test");
+  const store = new CanonicalPrototypeStore(database);
+  const feed = createOutputFeedItem({
+    id: "insight-pressure-wellbeing",
+    type: "possible_relationship",
+    createdAt: "2026-08-21T10:00:00.000Z",
+    targetDefinitionId: "overall_wellbeing",
+    factorDefinitionIds: ["pressure"],
+    support: 4,
+    opportunities: 7,
+    counterexamples: 2,
+    evidenceScore: 0.42,
+  });
+  await database.put<OutputFeedRecord>("output_feed", feed);
+
+  let projection = await store.loadProjection(defaultProfile("2026-08-21"));
+  assert.equal(projection.outputFeed[0].id, feed.id);
+  assert.equal(projection.outputFeed[0].readAt, undefined);
+
+  await store.markOutputRead(feed.id);
+  projection = await store.loadProjection(defaultProfile("2026-08-21"));
+  assert.ok(projection.outputFeed[0].readAt);
+  assert.equal(projection.outputFeed[0].body, feed.body);
 });

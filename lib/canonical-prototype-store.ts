@@ -20,19 +20,29 @@ import {
   METRIC_REGISTRY_VERSION,
   SupabaseJsRecordStore,
   affectedDateRange,
+  buildCompetingHypotheses,
+  createInputRequestRecords,
+  createResearchQuest,
   createSupabaseSyncTransport,
+  markInsightRead,
   metricDefinition,
   migrateLegacyLocalSnapshot,
+  rankInputRequests,
+  rankOutputFeed,
+  requestsFromQuests,
   synchronize,
 } from "./alma-core";
 import type {
   CanonicalEntity,
   CanonicalEvent,
   ForecastRecord,
+  InputRequestRecord,
   JsonValue,
   Observation,
+  OutputFeedRecord,
   PersonalPattern,
   PlannedEvent,
+  ResearchQuestRecord,
   SymptomEpisode,
   UserProfileRecord,
   VersionedRecord,
@@ -78,6 +88,16 @@ const ACTION_DEFINITIONS: Record<string, string> = {
   "кофе": "coffee",
 };
 
+export type NutritionEntry = {
+  id: string;
+  definitionId: string;
+  label: string;
+  localDate: string;
+  quantity?: number;
+  unit?: string;
+  dayPart?: "morning" | "day" | "evening" | "night";
+};
+
 export interface PrototypeProjection {
   profile: AlmaProfile;
   hasStoredProfile: boolean;
@@ -86,6 +106,10 @@ export interface PrototypeProjection {
   mainWaveByDate: Record<string, MainWaveDatum>;
   evidenceByDate: Record<string, DayEvidence>;
   patterns: PatternSummary[];
+  nutritionByDate: Record<string, NutritionEntry[]>;
+  researchQuests: ResearchQuestRecord[];
+  inputRequests: InputRequestRecord[];
+  outputFeed: OutputFeedRecord[];
   entries: Record<string, SymptomEntry[]>;
 }
 
@@ -130,7 +154,7 @@ export class CanonicalPrototypeStore {
   }
 
   async loadProjection(fallbackProfile: AlmaProfile): Promise<PrototypeProjection> {
-    const [profiles, observations, symptoms, events, entities, plannedEvents, forecasts, patterns] = await Promise.all([
+    const [profiles, observations, symptoms, events, entities, plannedEvents, forecasts, patterns, researchQuests, inputRequests, outputFeed] = await Promise.all([
       this.database.list<UserProfileRecord>("profiles"),
       this.observations.listCanonical(),
       this.symptoms.list(),
@@ -139,6 +163,9 @@ export class CanonicalPrototypeStore {
       this.database.list<PlannedEvent>("planned_events"),
       this.database.list<ForecastRecord>("forecasts"),
       this.database.list<PersonalPattern>("patterns"),
+      this.database.list<ResearchQuestRecord>("research_quests"),
+      this.database.list<InputRequestRecord>("input_requests"),
+      this.database.list<OutputFeedRecord>("output_feed"),
     ]);
     const profile = profiles
       .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
@@ -149,10 +176,12 @@ export class CanonicalPrototypeStore {
     const mainWaveRecordedAt = new Map<string, string>();
     const latestObservationAt = new Map<string, string>();
     const evidenceByDate: Record<string, DayEvidence> = {};
+    const nutritionByDate: Record<string, NutritionEntry[]> = {};
     const entries: Record<string, SymptomEntry[]> = {};
     const entityLabels = new Map(
       entities.map((entity) => [entity.canonicalKey, entity.userLabel ?? entity.canonicalLabel]),
     );
+    const entityKinds = new Map(entities.map((entity) => [entity.canonicalKey, entity.kind]));
 
     for (const observation of observations) {
       addEvidence(evidenceByDate, observation.localDate, observation.epistemicStatus);
@@ -244,20 +273,35 @@ export class CanonicalPrototypeStore {
       for (const localDate of datesCoveredBy(event.localDate, event.occurredEndAt)) {
         addEvidence(evidenceByDate, localDate, event.epistemicStatus);
       }
-      entries[event.localDate] ??= [];
       const definition = metricDefinition(event.entityDefinitionId);
       const label = definition?.label
         ?? entityLabels.get(event.entityDefinitionId)
         ?? attributeLabel(event.attributes)
         ?? "Своё действие";
-      entries[event.localDate].push({
-        id: event.id,
-        label,
-        zone: "general",
-        status: "confirmed",
-        intensity: 0,
-        suggestedBy: "user",
-      });
+      const isNutrition = event.entityDefinitionId !== "medication_intake"
+        && (definition?.kind === "intake" || entityKinds.get(event.entityDefinitionId) === "intake");
+      if (isNutrition && event.presence === "present") {
+        nutritionByDate[event.localDate] ??= [];
+        nutritionByDate[event.localDate].push({
+          id: event.id,
+          definitionId: event.entityDefinitionId,
+          label,
+          localDate: event.localDate,
+          quantity: event.quantity,
+          unit: event.unit,
+          dayPart: event.attributes?.dayPart as NutritionEntry["dayPart"],
+        });
+      } else if (!isNutrition) {
+        entries[event.localDate] ??= [];
+        entries[event.localDate].push({
+          id: event.id,
+          label,
+          zone: "general",
+          status: "confirmed",
+          intensity: 0,
+          suggestedBy: "user",
+        });
+      }
       if (event.presence === "present") {
         for (const localDate of datesCoveredBy(event.localDate, event.occurredEndAt)) {
           addTimelineMarker(evidenceByDate, localDate, {
@@ -331,6 +375,12 @@ export class CanonicalPrototypeStore {
         cumulativeWindowDays: pattern.cumulativeWindowDays,
         lifecycle: pattern.lifecycle,
       })),
+      nutritionByDate,
+      researchQuests: [...researchQuests].sort((left, right) => researchQuestOrder(left.status) - researchQuestOrder(right.status) || right.updatedAt.localeCompare(left.updatedAt)),
+      inputRequests: inputRequests
+        .filter((request) => request.status === "open" && (!request.expiresAt || request.expiresAt > new Date().toISOString()))
+        .sort((left, right) => right.priority - left.priority || left.estimatedEffort - right.estimatedEffort),
+      outputFeed: rankOutputFeed(outputFeed),
       entries,
     };
   }
@@ -498,6 +548,213 @@ export class CanonicalPrototypeStore {
       confidence: 1,
       schemaVersion: ALMA_SCHEMA_VERSION,
     } satisfies CanonicalEvent);
+  }
+
+  async saveIntake(input: {
+    localDate: string;
+    definitionId?: string;
+    label: string;
+    quantity?: number;
+    unit?: string;
+    dayPart?: NutritionEntry["dayPart"];
+    present?: boolean;
+    userId?: string;
+  }) {
+    const requestedDefinition = input.definitionId ?? "food_item";
+    const known = metricDefinition(requestedDefinition);
+    const isNamedFoodItem = requestedDefinition === "food_item"
+      && normalize(input.label) !== normalize(known?.label ?? "Еда");
+    const definitionId = known?.kind === "intake" && !isNamedFoodItem
+      ? requestedDefinition
+      : `custom_intake_${slug(input.label)}`;
+    if (!known || known.kind !== "intake" || isNamedFoodItem) {
+      await this.ensureCustomEntity({
+        canonicalKey: definitionId,
+        label: input.label,
+        kind: "intake",
+        domain: "nutrition",
+        userId: input.userId,
+      });
+    }
+    const now = new Date().toISOString();
+    const id = stableUuid(`intake:${input.localDate}:${definitionId}:${now}`);
+    return this.events.upsert({
+      id,
+      userId: input.userId,
+      version: 1,
+      createdAt: now,
+      updatedAt: now,
+      origin: "local",
+      entityDefinitionId: definitionId,
+      localDate: input.localDate,
+      occurredAt: input.present === false ? undefined : now,
+      timezone: inferTimezone(),
+      timePrecision: input.dayPart ? "day_part" : "date_only",
+      presence: input.present === false ? "confirmed_absent" : "present",
+      quantity: input.quantity,
+      unit: input.unit ?? known?.unit,
+      attributes: { label: input.label, ...(input.dayPart ? { dayPart: input.dayPart } : {}) },
+      source: { sourceId: "manual", sourceRecordId: id },
+      epistemicStatus: "user_confirmed",
+      confidence: 1,
+      schemaVersion: ALMA_SCHEMA_VERSION,
+    } satisfies CanonicalEvent);
+  }
+
+  async removeIntake(id: string) {
+    return this.events.markDeleted(id, new Date().toISOString());
+  }
+
+  async startResearch(input: {
+    title: string;
+    targetDefinitionId: string;
+    factorDefinitionIds: string[];
+    userId?: string;
+  }) {
+    const now = new Date().toISOString();
+    const hypotheses = buildCompetingHypotheses(input.targetDefinitionId, [{
+      factorDefinitionIds: input.factorDefinitionIds,
+      source: "user_question",
+      explanation: `Проверяем личный вопрос: «${input.title}».`,
+    }]);
+    const quest: ResearchQuestRecord = {
+      ...createResearchQuest({
+        title: input.title,
+        targetDefinitionId: input.targetDefinitionId,
+        hypotheses,
+        status: "active",
+        createdAt: now,
+      }),
+      userId: input.userId,
+      origin: "local",
+    };
+    await this.database.put("research_quests", quest);
+
+    const [observations, symptoms, events, openRequests] = await Promise.all([
+      this.observations.listCanonical(),
+      this.symptoms.list(),
+      this.events.list(),
+      this.database.list<InputRequestRecord>("input_requests"),
+    ]);
+    const knownDefinitionIds = new Set([
+      ...observations.map((record) => record.definitionId),
+      ...symptoms.map((record) => record.entityDefinitionId),
+      ...events.map((record) => record.entityDefinitionId),
+    ]);
+    const existingOpenTargets = new Set(openRequests.filter((request) => request.status === "open").map((request) => request.targetDefinitionId));
+    const ranked = rankInputRequests(requestsFromQuests([quest], knownDefinitionIds, new Date(now)))
+      .filter((request) => !existingOpenTargets.has(request.targetDefinitionId));
+    for (const request of createInputRequestRecords(ranked, now)) {
+      await this.database.put("input_requests", { ...request, userId: input.userId, origin: "local" });
+    }
+    return quest;
+  }
+
+  async answerInputRequest(input: {
+    requestId: string;
+    localDate: string;
+    present?: boolean;
+    value?: number;
+    quantity?: number;
+    userId?: string;
+  }) {
+    const request = await this.database.get<InputRequestRecord>("input_requests", input.requestId);
+    if (!request || request.status !== "open") return null;
+    const definition = metricDefinition(request.targetDefinitionId);
+    const now = new Date().toISOString();
+    let answerObservationId: string | undefined;
+
+    if (definition?.kind === "intake") {
+      await this.saveIntake({
+        localDate: input.localDate,
+        definitionId: request.targetDefinitionId,
+        label: definition.label,
+        quantity: input.quantity,
+        unit: definition.unit,
+        present: input.present,
+        userId: input.userId,
+      });
+    } else if (definition?.kind === "symptom") {
+      const id = stableUuid(`request-answer:${request.id}:${input.localDate}`);
+      await this.symptoms.upsert({
+        id,
+        userId: input.userId,
+        version: 1,
+        createdAt: now,
+        updatedAt: now,
+        origin: "local",
+        entityDefinitionId: request.targetDefinitionId,
+        localDate: input.localDate,
+        timezone: inferTimezone(),
+        timePrecision: "date_only",
+        presence: input.present === false ? "confirmed_absent" : "present",
+        source: { sourceId: "manual", sourceRecordId: id },
+        epistemicStatus: "user_confirmed",
+        confidence: 1,
+        provenanceContext: "research_input",
+        schemaVersion: ALMA_SCHEMA_VERSION,
+      } satisfies SymptomEpisode);
+    } else if (definition?.kind === "activity" || definition?.kind === "social_event" || definition?.kind === "cycle_event") {
+      const id = stableUuid(`request-answer:${request.id}:${input.localDate}`);
+      await this.events.upsert({
+        id,
+        userId: input.userId,
+        version: 1,
+        createdAt: now,
+        updatedAt: now,
+        origin: "local",
+        entityDefinitionId: request.targetDefinitionId,
+        localDate: input.localDate,
+        timezone: inferTimezone(),
+        timePrecision: "date_only",
+        presence: input.present === false ? "confirmed_absent" : "present",
+        source: { sourceId: "manual", sourceRecordId: id },
+        epistemicStatus: "user_confirmed",
+        confidence: 1,
+        schemaVersion: ALMA_SCHEMA_VERSION,
+      } satisfies CanonicalEvent);
+    } else {
+      const id = stableUuid(`request-answer:${request.id}:${input.localDate}`);
+      answerObservationId = id;
+      await this.observations.upsert({
+        id,
+        userId: input.userId,
+        version: 1,
+        createdAt: now,
+        updatedAt: now,
+        origin: "local",
+        definitionId: request.targetDefinitionId,
+        localDate: input.localDate,
+        timezone: inferTimezone(),
+        timePrecision: "date_only",
+        recordedAt: now,
+        value: input.value ?? (input.present === false ? 0 : 1),
+        rawValue: input.value ?? input.present ?? true,
+        unit: definition?.unit,
+        source: { sourceId: "manual", sourceRecordId: id },
+        epistemicStatus: "user_confirmed",
+        presence: input.present === false ? "confirmed_absent" : "present",
+        confidence: 1,
+        metadata: { reasonCode: request.reasonCode, relatedQuestId: request.relatedQuestId ?? null },
+        isCanonical: true,
+        schemaVersion: ALMA_SCHEMA_VERSION,
+      } satisfies Observation<number>);
+    }
+
+    return this.database.put("input_requests", {
+      ...request,
+      userId: input.userId ?? request.userId,
+      version: request.version + 1,
+      updatedAt: now,
+      status: "answered",
+      answerObservationId,
+    } satisfies InputRequestRecord);
+  }
+
+  async markOutputRead(id: string) {
+    const item = await this.database.get<OutputFeedRecord>("output_feed", id);
+    if (!item) return null;
+    return this.database.put("output_feed", markInsightRead(item, new Date().toISOString()));
   }
 
   async saveEntry(input: {
@@ -802,6 +1059,19 @@ function attributeLabel(attributes: Record<string, JsonValue> | undefined) {
 
 function emptyZoneValues(): ZoneValues {
   return { cognitive: 0, emotional: 0, physical: 0, libido: 0, social: 0 };
+}
+
+function researchQuestOrder(status: ResearchQuestRecord["status"]) {
+  const order: Record<ResearchQuestRecord["status"], number> = {
+    active: 0,
+    reactivated: 0,
+    sufficient_result: 1,
+    suggested: 2,
+    paused: 3,
+    background_monitoring: 4,
+    completed: 5,
+  };
+  return order[status];
 }
 
 function addEvidence(

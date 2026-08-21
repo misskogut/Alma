@@ -137,6 +137,7 @@ export interface InputRequestRecord extends VersionedRecord {
   retrospectiveAllowed: boolean;
   explanation: string;
   status: "open" | "answered" | "expired" | "dismissed";
+  answerObservationId?: string;
   algorithmVersion: string;
 }
 

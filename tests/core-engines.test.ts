@@ -29,7 +29,15 @@ import type {
   NumericEvidencePoint,
   PatternCandidate,
 } from "../lib/alma-core/engines/types";
+import { stableId } from "../lib/alma-core/engines/math";
 import { METRIC_REGISTRY } from "../lib/alma-core/registry/metric-registry";
+
+test("engine record identities are deterministic UUIDs accepted by canonical storage", () => {
+  const first = stableId("research", "overall_wellbeing", "pressure");
+  const second = stableId("research", "overall_wellbeing", "pressure");
+  assert.equal(first, second);
+  assert.match(first, /^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u);
+});
 
 test("taxonomy keeps symptoms, states, activities and intake separate", () => {
   assert.equal(METRIC_REGISTRY.headache.kind, "symptom");

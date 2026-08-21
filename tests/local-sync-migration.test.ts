@@ -4,8 +4,10 @@ import {
   LocalDatabase,
   LocalObservationRepository,
   MemoryStorageAdapter,
+  buildCompetingHypotheses,
   canonicalRecordToSupabaseRow,
   createOutputFeedItem,
+  createResearchQuest,
   createSupabaseSyncTransport,
   invalidateAfterDeletion,
   mergeDirtyRanges,
@@ -15,8 +17,13 @@ import {
   supabaseRowToCanonicalRecord,
 } from "../lib/alma-core";
 import type {
+  ForecastRecord,
+  InputRequestRecord,
   Observation,
+  OutputFeedRecord,
+  PersonalPattern,
   PlannedEvent,
+  ResearchQuestRecord,
   StructuredInsight,
   SymptomEpisode,
   SyncTransport,
@@ -294,6 +301,120 @@ test("Supabase transport protects base version and pulls deterministic changes",
   const pull = await transport.pull("2026-08-21T12:00:00.000Z");
   assert.equal(pull.cursor, "2026-08-23T00:00:00.000Z");
   assert.ok(pull.changes.some((item) => item.record.id === first.id));
+});
+
+test("Supabase mappings round-trip learned, forecast, research and contact records", () => {
+  const userId = "00000000-0000-4000-a000-000000000001";
+  const timestamp = "2026-08-21T10:00:00.000Z";
+  const planned = plannedEvent();
+  const plannedRow = canonicalRecordToSupabaseRow("plannedEvents", planned, userId);
+  const plannedRestored = supabaseRowToCanonicalRecord("planned_events", plannedRow) as PlannedEvent;
+  assert.equal(plannedRestored.entityDefinitionId, planned.entityDefinitionId);
+  assert.equal(plannedRestored.status, "planned");
+
+  const pattern: PersonalPattern = {
+    ...record("pattern-roundtrip", timestamp),
+    targetDefinitionId: "overall_wellbeing",
+    factorDefinitionIds: ["pressure"],
+    modifierDefinitionIds: ["sleep_duration"],
+    relationshipType: "lagged",
+    direction: "up_down",
+    typicalLagMinutes: 180,
+    lagRangeMinutes: [60, 360],
+    evidenceScore: 0.64,
+    stage: "repeating_pattern",
+    lifecycle: "strengthening",
+    evidence: [],
+    validFrom: "2026-08-01",
+    algorithmVersion: "pattern-test",
+  };
+  const patternRestored = supabaseRowToCanonicalRecord(
+    "patterns",
+    canonicalRecordToSupabaseRow("patterns", pattern, userId),
+  ) as PersonalPattern;
+  assert.deepEqual(patternRestored.lagRangeMinutes, [60, 360]);
+  assert.deepEqual(patternRestored.modifierDefinitionIds, ["sleep_duration"]);
+
+  const forecast: ForecastRecord = {
+    ...record("forecast-roundtrip", timestamp),
+    targetDefinitionId: "overall_wellbeing",
+    generatedAt: timestamp,
+    windowStart: "2026-08-22T00:00:00.000Z",
+    windowEnd: "2026-08-22T23:59:59.999Z",
+    probability: 0.68,
+    predictedValue: 0.42,
+    uncertainty: 0.21,
+    positiveContributorIds: ["sleep_duration"],
+    negativeContributorIds: ["pressure"],
+    compensatorIds: ["walking"],
+    relatedPatternIds: [pattern.id],
+    outcome: "pending",
+    algorithmVersion: "forecast-test",
+  };
+  const forecastRestored = supabaseRowToCanonicalRecord(
+    "forecasts",
+    canonicalRecordToSupabaseRow("forecasts", forecast, userId),
+  ) as ForecastRecord;
+  assert.equal(forecastRestored.probability, 0.68);
+  assert.deepEqual(forecastRestored.compensatorIds, ["walking"]);
+
+  const quest: ResearchQuestRecord = createResearchQuest({
+    title: "Меняется ли самочувствие вместе с давлением?",
+    targetDefinitionId: "overall_wellbeing",
+    status: "active",
+    createdAt: timestamp,
+    hypotheses: buildCompetingHypotheses("overall_wellbeing", [{
+      factorDefinitionIds: ["pressure"],
+      source: "user_question",
+      explanation: "Проверяем личный вопрос.",
+    }]),
+  });
+  const questRestored = supabaseRowToCanonicalRecord(
+    "research_quests",
+    canonicalRecordToSupabaseRow("research_quests", quest, userId),
+  ) as ResearchQuestRecord;
+  assert.equal(questRestored.status, "active");
+  assert.deepEqual(questRestored.requiredMetricIds.sort(), ["overall_wellbeing", "pressure"]);
+
+  const request: InputRequestRecord = {
+    ...record("input-roundtrip", timestamp),
+    targetDefinitionId: "overall_wellbeing",
+    reasonCode: "research_missing_metric",
+    relatedQuestId: quest.id,
+    priority: 0.82,
+    informationValue: 0.85,
+    estimatedEffort: 0.15,
+    recurring: true,
+    retrospectiveAllowed: false,
+    explanation: "Короткий ответ поможет проверить личный вопрос.",
+    status: "answered",
+    answerObservationId: "observation-answer",
+    algorithmVersion: "input-test",
+  };
+  const requestRestored = supabaseRowToCanonicalRecord(
+    "input_requests",
+    canonicalRecordToSupabaseRow("input_requests", request, userId),
+  ) as InputRequestRecord;
+  assert.equal(requestRestored.answerObservationId, "observation-answer");
+  assert.equal(requestRestored.relatedQuestId, quest.id);
+
+  const feed: OutputFeedRecord = createOutputFeedItem({
+    id: "feed-roundtrip-source",
+    type: "possible_relationship",
+    createdAt: timestamp,
+    targetDefinitionId: "overall_wellbeing",
+    factorDefinitionIds: ["pressure"],
+    relatedPatternId: pattern.id,
+    relatedQuestId: quest.id,
+    evidenceScore: 0.46,
+  });
+  const feedRestored = supabaseRowToCanonicalRecord(
+    "output_feed",
+    canonicalRecordToSupabaseRow("output_feed", feed, userId),
+  ) as OutputFeedRecord;
+  assert.equal(feedRestored.body, feed.body);
+  assert.equal(feedRestored.relatedQuestId, quest.id);
+  assert.deepEqual(feedRestored.structuredPayload.factorDefinitionIds, ["pressure"]);
 });
 
 function record(id: string, updatedAt = "2026-08-21T00:00:00.000Z"): VersionedRecord {

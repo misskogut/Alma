@@ -6,6 +6,9 @@ import ActivityPanel from "../components/activity-panel";
 import CycleHero from "../components/cycle-hero";
 import EnvironmentPanel, { ContextStrip } from "../components/environment-panel";
 import OverallWellbeing from "../components/overall-wellbeing";
+import NutritionPanel from "../components/nutrition-panel";
+import QuickDock from "../components/quick-dock";
+import ResearchPanel from "../components/research-panel";
 import { ConnectionsSheet, CycleSettingsSheet, DaySheet } from "../components/sheets";
 import SymptomCheck from "../components/symptom-check";
 import WaveChart from "../components/wave-chart";
@@ -71,6 +74,10 @@ export default function AlmaPrototype() {
   const [mainWaveByDate, setMainWaveByDate] = useState<Record<string, MainWaveDatum>>({});
   const [evidenceByDate, setEvidenceByDate] = useState<Record<string, DayEvidence>>({});
   const [patterns, setPatterns] = useState<PatternSummary[]>([]);
+  const [nutritionByDate, setNutritionByDate] = useState<PrototypeProjection["nutritionByDate"]>({});
+  const [researchQuests, setResearchQuests] = useState<PrototypeProjection["researchQuests"]>([]);
+  const [inputRequests, setInputRequests] = useState<PrototypeProjection["inputRequests"]>([]);
+  const [outputFeed, setOutputFeed] = useState<PrototypeProjection["outputFeed"]>([]);
   const [symptomsByDate, setSymptomsByDate] = useState<Record<string, SymptomEntry[]>>(() => ({ [currentIso]: cloneSuggestions() }));
   const [activeIndex, setActiveIndex] = useState(TODAY_INDEX);
   const [activeZone, setActiveZone] = useState<ZoneKey | null>(null);
@@ -135,6 +142,10 @@ export default function AlmaPrototype() {
     setMainWaveByDate(projection.mainWaveByDate);
     setEvidenceByDate(projection.evidenceByDate);
     setPatterns(projection.patterns);
+    setNutritionByDate(projection.nutritionByDate);
+    setResearchQuests(projection.researchQuests);
+    setInputRequests(projection.inputRequests);
+    setOutputFeed(projection.outputFeed);
     setSymptomsByDate(withCurrentSuggestions(projection.entries, currentIso));
   }, [currentIso]);
 
@@ -169,6 +180,18 @@ export default function AlmaPrototype() {
       .then(() => runCanonicalSync())
       .catch(() => setSyncMode("local"));
   }, [runCanonicalSync]);
+
+  const persistAndRefresh = useCallback((operation: (store: CanonicalPrototypeStore) => Promise<unknown>) => {
+    const store = canonicalStore.current;
+    if (!store) return;
+    void operation(store)
+      .then(async () => {
+        applyProjection(await store.loadProjection(profileRef.current));
+        await runCanonicalSync();
+        applyProjection(await store.loadProjection(profileRef.current));
+      })
+      .catch(() => setSyncMode("local"));
+  }, [applyProjection, runCanonicalSync]);
 
   const connectCloud = useCallback(async (fallbackProfile = profileRef.current) => {
     const store = canonicalStore.current;
@@ -392,6 +415,34 @@ export default function AlmaPrototype() {
     persistProfile({ ...profile, cycleQuickAccessActions: cycleQuickAccessActions.slice(0, 5) });
   }
 
+  function addNutrition(input: { definitionId: string; label: string; quantity?: number; unit?: string; dayPart?: "morning" | "day" | "evening" | "night" }) {
+    persistAndRefresh((store) => store.saveIntake({ localDate: activeDay.iso, ...input, userId: userId ?? undefined }));
+  }
+
+  function removeNutrition(id: string) {
+    persistAndRefresh((store) => store.removeIntake(id));
+  }
+
+  function startResearch(input: { title: string; targetDefinitionId: string; factorDefinitionIds: string[] }) {
+    persistAndRefresh((store) => store.startResearch({ ...input, userId: userId ?? undefined }));
+  }
+
+  function researchNutrition(entry: PrototypeProjection["nutritionByDate"][string][number]) {
+    startResearch({
+      title: `Меняется ли самочувствие в дни, когда отмечен ${entry.label.toLocaleLowerCase("ru-RU")}?`,
+      targetDefinitionId: "overall_wellbeing",
+      factorDefinitionIds: [entry.definitionId],
+    });
+  }
+
+  function answerInput(input: { requestId: string; present?: boolean; value?: number; quantity?: number }) {
+    persistAndRefresh((store) => store.answerInputRequest({ ...input, localDate: activeDay.iso, userId: userId ?? undefined }));
+  }
+
+  function markOutputRead(id: string) {
+    persistAndRefresh((store) => store.markOutputRead(id));
+  }
+
   function applyVoiceDraft(draft: VoiceDraft) {
     const nextZones = { ...activeDay.zones, ...draft.zones };
     setStateByDate((current) => ({ ...current, [activeDay.iso]: nextZones }));
@@ -446,6 +497,8 @@ export default function AlmaPrototype() {
 
       {!activeDay.isForecast ? <BodyCheckin values={activeDay.zones} loadIntensities={loadIntensityByDate[activeDay.iso] ?? {}} symptoms={activeSymptoms} symptomHistory={symptomHistory} activeZone={activeZone} onSelect={setActiveZone} onBeginAdjustment={beginZoneAdjustment} onChange={changeZone} onCommit={commitState} onChangeLoadIntensity={changeLoadIntensity} onCommitLoadIntensity={commitLoadIntensity} onAddQuickSymptom={addSymptom} onUpdateQuickSymptom={updateSymptom} /> : <section className="forecast-card glass-card"><span>∿</span><div><p className="eyebrow">{activeDay.integralStatus === "predicted" ? "персональный прогноз" : "день ещё впереди"}</p><h2>{activeDay.integralStatus === "predicted" ? "Вероятный ориентир" : "Прогноз пока не сформирован"}</h2><p>{activeDay.integralStatus === "predicted" ? "Это сохранённый прогноз, а не факт. После этого дня ALMA проверит, совпал ли он с реальностью." : "ALMA не дорисовывает состояние без достаточных персональных оснований."}</p></div></section>}
 
+      {!activeDay.isForecast && <NutritionPanel entries={nutritionByDate[activeDay.iso] ?? []} onAdd={addNutrition} onRemove={removeNutrition} onResearch={researchNutrition} />}
+
       <section className="wave-section" aria-labelledby="wave-title">
         <header className="wave-section-header">
           <div><p className="eyebrow">{relativeDayLabel(activeDay.iso)} · {formatShortDate(activeDay.iso)}</p><h2 id="wave-title">Субъективная волна</h2></div>
@@ -461,6 +514,8 @@ export default function AlmaPrototype() {
         <div className="insight-symbol">✦</div><div><p className="eyebrow">{insight.kicker}</p><h2>{insight.title}</h2><p>{insight.body}</p></div>
       </article>
 
+      <ResearchPanel quests={researchQuests} onStart={startResearch} />
+
       {!activeDay.isForecast ? <>
         <SymptomCheck symptoms={activeSymptoms} onUpdate={updateSymptom} onAdd={addSymptom} />
       </> : null}
@@ -475,7 +530,7 @@ export default function AlmaPrototype() {
       <footer className="app-footer"><p>Наблюдение, а не диагноз</p><span>ALMA помогает замечать повторения и фон дня. Она не заменяет врача.</span><i /></footer>
     </div>
 
-    <button className="floating-voice-trigger" type="button" onClick={() => setVoiceCheckinOpen(true)} aria-label="Рассказать о дне голосом"><svg viewBox="0 0 48 48" aria-hidden="true"><defs><linearGradient id="fixed-voice-rainbow" x1="8" y1="8" x2="40" y2="40"><stop stopColor="#6ce8ff"/><stop offset=".34" stopColor="#a979ff"/><stop offset=".68" stopColor="#ff83c9"/><stop offset="1" stopColor="#ffd176"/></linearGradient></defs><rect x="17" y="7" width="14" height="23" rx="7"/><path d="M12 24a12 12 0 0 0 24 0M24 36v6M17 42h14"/></svg><span>рассказать</span></button>
+    <QuickDock requests={inputRequests} outputFeed={outputFeed} onAnswer={answerInput} onMarkRead={markOutputRead} onVoice={() => setVoiceCheckinOpen(true)} />
     {cycleSettingsOpen && <CycleSettingsSheet profile={profile} activeIso={activeDay.iso} selectedActionLabels={activeSymptoms.filter((item) => item.zone === "general" && item.status === "confirmed").map((item) => item.label)} onSave={saveProfile} onToggleQuickAction={toggleQuickAction} onUpdateQuickActions={updateCycleActions} onUpdateQuickAccess={updateCycleQuickAccess} onClose={() => setCycleSettingsOpen(false)} />}
     {daySheetOpen && <DaySheet day={activeDay} environment={environment} symptoms={activeSymptoms} activeContexts={activeContexts} internalWaves={internalWaves} activeLayers={activeLayers} deviceSignals={null} onClose={() => setDaySheetOpen(false)} />}
     {connectionsOpen && <ConnectionsSheet day={activeDay} patterns={patterns} selectedDefinitionId={selectedTimelineDefinitionId} onSelectDefinition={(definitionId) => { setSelectedTimelineDefinitionId(definitionId); setConnectionsOpen(false); }} onClose={() => setConnectionsOpen(false)} />}

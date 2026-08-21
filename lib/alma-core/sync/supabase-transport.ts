@@ -3,12 +3,16 @@ import type {
   CanonicalEntity,
   CanonicalEvent,
   ContextPeriod,
+  ForecastRecord,
   Observation,
+  PersonalPattern,
   PlannedEvent,
   SymptomEpisode,
   UserProfileRecord,
   VersionedRecord,
 } from "../data-model/types";
+import type { InputRequestRecord, ResearchQuestRecord } from "../engines/types";
+import type { OutputFeedRecord } from "../communication/types";
 import type {
   RemoteChange,
   SyncPushResult,
@@ -135,7 +139,7 @@ const mappings: Record<string, RecordMapping> = {
     toRow: symptomToRow as RecordMapping["toRow"],
     fromRow: rowToSymptom,
   },
-  plannedEvents: {
+  planned_events: {
     table: "alma_v2_planned_events",
     identityColumn: "id",
     conflictColumn: "id",
@@ -149,7 +153,50 @@ const mappings: Record<string, RecordMapping> = {
     toRow: contextToRow as RecordMapping["toRow"],
     fromRow: rowToContext,
   },
+  patterns: {
+    table: "alma_v2_patterns",
+    identityColumn: "id",
+    conflictColumn: "id",
+    toRow: patternToRow as RecordMapping["toRow"],
+    fromRow: rowToPattern,
+  },
+  forecasts: {
+    table: "alma_v2_forecasts",
+    identityColumn: "id",
+    conflictColumn: "id",
+    toRow: forecastToRow as RecordMapping["toRow"],
+    fromRow: rowToForecast,
+  },
+  research_quests: {
+    table: "alma_v2_research_quests",
+    identityColumn: "id",
+    conflictColumn: "id",
+    toRow: researchQuestToRow as RecordMapping["toRow"],
+    fromRow: rowToResearchQuest,
+  },
+  input_requests: {
+    table: "alma_v2_input_requests",
+    identityColumn: "id",
+    conflictColumn: "id",
+    toRow: inputRequestToRow as RecordMapping["toRow"],
+    fromRow: rowToInputRequest,
+  },
+  output_feed: {
+    table: "alma_v2_output_feed",
+    identityColumn: "id",
+    conflictColumn: "id",
+    toRow: outputFeedToRow as RecordMapping["toRow"],
+    fromRow: rowToOutputFeed,
+  },
 };
+
+const recordTypeAliases: Record<string, keyof typeof mappings> = {
+  plannedEvents: "planned_events",
+};
+
+function mappingFor(recordType: string) {
+  return mappings[recordType] ?? mappings[recordTypeAliases[recordType]];
+}
 
 function entityToRow(record: CanonicalEntity, userId: string): SupabaseRow {
   return {
@@ -185,7 +232,7 @@ export function createSupabaseSyncTransport(input: {
   const now = input.now ?? (() => new Date().toISOString());
   return {
     async push({ entry, record }): Promise<SyncPushResult> {
-      const mapping = mappings[entry.recordType];
+      const mapping = mappingFor(entry.recordType);
       if (!mapping) {
         return {
           status: "conflict",
@@ -266,13 +313,13 @@ export function canonicalRecordToSupabaseRow(
   record: VersionedRecord,
   userId: string,
 ) {
-  const mapping = mappings[recordType];
+  const mapping = mappingFor(recordType);
   if (!mapping) throw new Error(`Unsupported record type: ${recordType}`);
   return cleanRow(mapping.toRow(record, userId));
 }
 
 export function supabaseRowToCanonicalRecord(recordType: string, row: SupabaseRow) {
-  const mapping = mappings[recordType];
+  const mapping = mappingFor(recordType);
   if (!mapping) throw new Error(`Unsupported record type: ${recordType}`);
   return mapping.fromRow(row);
 }
@@ -529,6 +576,210 @@ function rowToContext(row: SupabaseRow): ContextPeriod {
   };
 }
 
+function patternToRow(record: PersonalPattern, userId: string): SupabaseRow {
+  return {
+    ...baseRow(record, userId),
+    target_definition_id: record.targetDefinitionId,
+    factor_definition_ids: record.factorDefinitionIds,
+    modifier_definition_ids: record.modifierDefinitionIds,
+    relationship_type: record.relationshipType,
+    direction: record.direction ?? null,
+    typical_lag_minutes: record.typicalLagMinutes ?? null,
+    lag_range_minutes: record.lagRangeMinutes
+      ? `[${record.lagRangeMinutes[0]},${record.lagRangeMinutes[1]}]`
+      : null,
+    cumulative_window_days: record.cumulativeWindowDays ?? null,
+    threshold: record.threshold ?? null,
+    evidence_score: record.evidenceScore,
+    stage: record.stage,
+    lifecycle: record.lifecycle,
+    evidence: record.evidence,
+    parent_pattern_id: record.parentPatternId ?? null,
+    valid_from: record.validFrom,
+    valid_to: record.validTo ?? null,
+    algorithm_version: record.algorithmVersion,
+  };
+}
+
+function rowToPattern(row: SupabaseRow): PersonalPattern {
+  return {
+    ...versionedFromRow(row),
+    targetDefinitionId: String(row.target_definition_id),
+    factorDefinitionIds: stringArray(row.factor_definition_ids),
+    modifierDefinitionIds: stringArray(row.modifier_definition_ids),
+    relationshipType: row.relationship_type as PersonalPattern["relationshipType"],
+    direction: nullableValue(row.direction) as PersonalPattern["direction"],
+    typicalLagMinutes: optionalNumber(row.typical_lag_minutes),
+    lagRangeMinutes: optionalNumberRange(row.lag_range_minutes),
+    cumulativeWindowDays: optionalNumber(row.cumulative_window_days),
+    threshold: optionalNumber(row.threshold),
+    evidenceScore: Number(row.evidence_score),
+    stage: row.stage as PersonalPattern["stage"],
+    lifecycle: row.lifecycle as PersonalPattern["lifecycle"],
+    evidence: (row.evidence ?? []) as PersonalPattern["evidence"],
+    parentPatternId: optionalString(row.parent_pattern_id),
+    validFrom: String(row.valid_from),
+    validTo: optionalString(row.valid_to),
+    algorithmVersion: String(row.algorithm_version),
+  };
+}
+
+function forecastToRow(record: ForecastRecord, userId: string): SupabaseRow {
+  return {
+    ...baseRow(record, userId),
+    target_definition_id: record.targetDefinitionId,
+    generated_at: record.generatedAt,
+    window_start: record.windowStart,
+    window_end: record.windowEnd,
+    probability: record.probability,
+    predicted_value: record.predictedValue ?? null,
+    uncertainty: record.uncertainty ?? null,
+    positive_contributor_ids: record.positiveContributorIds,
+    negative_contributor_ids: record.negativeContributorIds,
+    compensator_ids: record.compensatorIds,
+    related_pattern_ids: record.relatedPatternIds,
+    outcome: record.outcome,
+    resolved_at: record.resolvedAt ?? null,
+    brier_score: record.brierScore ?? null,
+    algorithm_version: record.algorithmVersion,
+  };
+}
+
+function rowToForecast(row: SupabaseRow): ForecastRecord {
+  return {
+    ...versionedFromRow(row),
+    targetDefinitionId: String(row.target_definition_id),
+    generatedAt: String(row.generated_at),
+    windowStart: String(row.window_start),
+    windowEnd: String(row.window_end),
+    probability: Number(row.probability),
+    predictedValue: optionalNumber(row.predicted_value),
+    uncertainty: optionalNumber(row.uncertainty),
+    positiveContributorIds: stringArray(row.positive_contributor_ids),
+    negativeContributorIds: stringArray(row.negative_contributor_ids),
+    compensatorIds: stringArray(row.compensator_ids),
+    relatedPatternIds: stringArray(row.related_pattern_ids),
+    outcome: row.outcome as ForecastRecord["outcome"],
+    resolvedAt: optionalString(row.resolved_at),
+    brierScore: optionalNumber(row.brier_score),
+    algorithmVersion: String(row.algorithm_version),
+  };
+}
+
+function researchQuestToRow(record: ResearchQuestRecord, userId: string): SupabaseRow {
+  return {
+    ...baseRow(record, userId),
+    title: record.title,
+    target_definition_id: record.targetDefinitionId,
+    status: record.status,
+    hypotheses: record.hypotheses,
+    required_metric_ids: record.requiredMetricIds,
+    optional_metric_ids: record.optionalMetricIds,
+    progress: record.progress,
+    dossier: record.dossier,
+    algorithm_version: record.algorithmVersion,
+  };
+}
+
+function rowToResearchQuest(row: SupabaseRow): ResearchQuestRecord {
+  return {
+    ...versionedFromRow(row),
+    title: String(row.title),
+    targetDefinitionId: String(row.target_definition_id),
+    status: row.status as ResearchQuestRecord["status"],
+    hypotheses: (row.hypotheses ?? []) as ResearchQuestRecord["hypotheses"],
+    requiredMetricIds: stringArray(row.required_metric_ids),
+    optionalMetricIds: stringArray(row.optional_metric_ids),
+    progress: (row.progress ?? {}) as ResearchQuestRecord["progress"],
+    dossier: (row.dossier ?? {}) as ResearchQuestRecord["dossier"],
+    algorithmVersion: String(row.algorithm_version),
+  };
+}
+
+function inputRequestToRow(record: InputRequestRecord, userId: string): SupabaseRow {
+  return {
+    ...baseRow(record, userId),
+    target_definition_id: record.targetDefinitionId,
+    reason_code: record.reasonCode,
+    related_quest_id: record.relatedQuestId ?? null,
+    related_hypothesis_id: record.relatedHypothesisId ?? null,
+    priority: record.priority,
+    information_value: record.informationValue,
+    estimated_effort: record.estimatedEffort,
+    recurring: record.recurring,
+    expires_at: record.expiresAt ?? null,
+    retrospective_allowed: record.retrospectiveAllowed,
+    explanation: record.explanation,
+    status: record.status,
+    answer_observation_id: record.answerObservationId ?? null,
+    algorithm_version: record.algorithmVersion,
+  };
+}
+
+function rowToInputRequest(row: SupabaseRow): InputRequestRecord {
+  return {
+    ...versionedFromRow(row),
+    targetDefinitionId: String(row.target_definition_id),
+    reasonCode: String(row.reason_code),
+    relatedQuestId: optionalString(row.related_quest_id),
+    relatedHypothesisId: optionalString(row.related_hypothesis_id),
+    priority: Number(row.priority),
+    informationValue: Number(row.information_value),
+    estimatedEffort: Number(row.estimated_effort),
+    recurring: Boolean(row.recurring),
+    expiresAt: optionalString(row.expires_at),
+    retrospectiveAllowed: Boolean(row.retrospective_allowed),
+    explanation: String(row.explanation),
+    status: row.status as InputRequestRecord["status"],
+    answerObservationId: optionalString(row.answer_observation_id),
+    algorithmVersion: String(row.algorithm_version),
+  };
+}
+
+function outputFeedToRow(record: OutputFeedRecord, userId: string): SupabaseRow {
+  return {
+    ...baseRow(record, userId),
+    insight_type: record.insightType,
+    structured_payload: record.structuredPayload,
+    title: record.title,
+    body: record.body,
+    relevant_period_start: record.relevantPeriodStart ?? null,
+    relevant_period_end: record.relevantPeriodEnd ?? null,
+    priority: record.priority,
+    read_at: record.readAt ?? null,
+    archived_at: record.archivedAt ?? null,
+    carry_forward: record.carryForward,
+    related_pattern_id: record.relatedPatternId ?? null,
+    related_quest_id: record.relatedQuestId ?? null,
+    supersedes_insight_id: record.supersedesInsightId ?? null,
+    source_data_deleted_at: record.sourceDataDeletedAt ?? null,
+    algorithm_version: record.algorithmVersion,
+    narrative_version: record.narrativeVersion,
+  };
+}
+
+function rowToOutputFeed(row: SupabaseRow): OutputFeedRecord {
+  return {
+    ...versionedFromRow(row),
+    insightType: row.insight_type as OutputFeedRecord["insightType"],
+    structuredPayload: row.structured_payload as OutputFeedRecord["structuredPayload"],
+    title: String(row.title),
+    body: String(row.body),
+    relevantPeriodStart: optionalString(row.relevant_period_start),
+    relevantPeriodEnd: optionalString(row.relevant_period_end),
+    priority: Number(row.priority),
+    readAt: optionalString(row.read_at),
+    archivedAt: optionalString(row.archived_at),
+    carryForward: Boolean(row.carry_forward),
+    relatedPatternId: optionalString(row.related_pattern_id),
+    relatedQuestId: optionalString(row.related_quest_id),
+    supersedesInsightId: optionalString(row.supersedes_insight_id),
+    sourceDataDeletedAt: optionalString(row.source_data_deleted_at),
+    algorithmVersion: String(row.algorithm_version),
+    narrativeVersion: String(row.narrative_version),
+  };
+}
+
 function versionedFromRow(row: SupabaseRow, id = String(row.id)): VersionedRecord {
   return {
     id,
@@ -576,4 +827,22 @@ function nullableValue(value: unknown) {
 
 function nullableJson(value: unknown) {
   return value == null ? undefined : value as Observation["rawValue"];
+}
+
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.map(String) : [];
+}
+
+function optionalNumberRange(value: unknown): [number, number] | undefined {
+  if (Array.isArray(value) && value.length >= 2) {
+    return [Number(value[0]), Number(value[1])];
+  }
+  if (typeof value !== "string" || value.length < 5) return undefined;
+  const opening = value[0];
+  const closing = value[value.length - 1];
+  if (!(opening === "[" || opening === "(") || !(closing === "]" || closing === ")")) {
+    return undefined;
+  }
+  const [lower, upper] = value.slice(1, -1).split(",").map((part) => Number(part.trim()));
+  return Number.isFinite(lower) && Number.isFinite(upper) ? [lower, upper] : undefined;
 }

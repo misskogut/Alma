@@ -61,12 +61,15 @@ export function quantile(values: number[], probability: number) {
 
 export function stableId(...parts: Array<string | number | undefined>) {
   const source = parts.filter((part) => part !== undefined).join("|");
-  let hash = 2166136261;
+  const hashes = [0x811c9dc5, 0x9e3779b9, 0x85ebca6b, 0xc2b2ae35];
   for (let index = 0; index < source.length; index += 1) {
-    hash ^= source.charCodeAt(index);
-    hash = Math.imul(hash, 16777619);
+    const code = source.charCodeAt(index);
+    for (let part = 0; part < hashes.length; part += 1) {
+      hashes[part] = Math.imul(hashes[part] ^ (code + part * 31), 0x01000193);
+    }
   }
-  return `alma-${(hash >>> 0).toString(16).padStart(8, "0")}`;
+  const hex = hashes.map((hash) => (hash >>> 0).toString(16).padStart(8, "0")).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-5${hex.slice(13, 16)}-a${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
 }
 
 export function minutesBetween(earlier: string, later: string) {
